@@ -1,7 +1,7 @@
 services:
   aloh:
-    build: .
-    # image: aloh-image:latest
+    # build: .
+    image: aloh-image:latest
     env_file:
       - .env
     ports:
