@@ -2,6 +2,7 @@ services:
   aloh:
     # build: .
     image: aloh-image:latest
+    container_name: aloh
     env_file:
       - .env
     ports:
