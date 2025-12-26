@@ -33,5 +33,5 @@ deploy-job:
       CONFIG_PATH=$CONFIG_PATH
       SERVER_PORT=$SERVER_PORT
       EOF
-    - docker-compose up -d aloh
-    - docker logs aloh
+    - docker-compose rm -s -f aloh || true
+    - docker-compose logs aloh
