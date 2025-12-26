@@ -1,0 +1,33 @@
+stages:
+  - build
+  - test
+  - deploy
+
+before_script:
+  - |
+    cat > .env << EOF
+    CONFIG_PATH=$CONFIG_PATH
+    SERVER_PORT=$SERVER_PORT
+    EOF
+
+build-job:
+  stage: build
+  script:
+    - docker build -t aloh-image .
+
+test-job:
+  stage: test
+  script:
+    - echo "testing..."
+    - sleep 10s
+
+deploy-job:
+  stage: deploy 
+  script:
+    # - mkdir -p ./certs
+    # - cp "$TLS_CERT" ./certs/server.crt
+    # - cp "$TLS_KEY" ./certs/server.key
+    # - chmod 644 ./certs/server.crt
+    - chmod 600 ./certs/server.key
+    - docker-compose up -d aloh
+    - docker logs aloh

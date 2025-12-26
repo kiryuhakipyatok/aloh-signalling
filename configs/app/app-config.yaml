@@ -1,0 +1,17 @@
+app:
+  name: "aloh"
+  version: "1.0.0"
+  env: "local"
+
+server:
+  host: "localhost"
+  port: "${SERVER_PORT}"
+  handshakeTimeout: 10s
+  idleTimeout: 10m
+  keepAlivePeriodTimeout: 10s
+  closeTimeout: 10s
+  startTimeout: 10s
+  certsPath: "../certs"
+  nextProtos: ["aloh-proto"]
+
+  

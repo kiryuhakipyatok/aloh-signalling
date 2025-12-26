@@ -1,0 +1,12 @@
+services:
+  aloh:
+    build: .
+    # image: aloh-image:latest
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}/tcp" 
+      - "${SERVER_PORT}:${SERVER_PORT}/udp"
+    volumes:
+      - ../certs/server.crt:/certs/server.crt:ro
+      - ../certs/server.key:/certs/server.key:ro
