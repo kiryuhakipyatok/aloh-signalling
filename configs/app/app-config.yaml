@@ -11,7 +11,7 @@ server:
   keepAlivePeriodTimeout: 10s
   closeTimeout: 10s
   startTimeout: 10s
-  certsPath: "../certs"
+  certsPath: "../etc/certs"
   nextProtos: ["aloh-proto"]
 
   
