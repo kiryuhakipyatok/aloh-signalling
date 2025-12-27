@@ -48,6 +48,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return nil
 	}
+	log.Info("new stream", logger.Attr("id", stream.StreamID()))
 	decoder := json.NewDecoder(stream)
 	var (
 		msg    protocols.Message
@@ -121,6 +122,7 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 				go func() {
 					if err := ss.proxing(ctx, stream, msg.Data, conn); err != nil {
 						log.Error("proxing failed", logger.Err(err))
+						return
 					}
 				}()
 			default:
