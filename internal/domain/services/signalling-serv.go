@@ -54,23 +54,24 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		msg    protocols.Message
 		errMsg string
 	)
+	addr := conn.RemoteAddr().String()
 	if err := decoder.Decode(&msg); err != nil {
 		errMsg = "failed to decode msg"
 		log.Error(errMsg, logger.Err(err))
-		ss.writeMsg(stream, errMsg)
+		ss.writeMsg(stream, errMsg, addr)
 		return err
 	}
 	if msg.Type != regType {
 		errMsg = "wrong message type to register"
 		log.Error(errMsg, logger.Attr("msgType", msg.Type), logger.Err(err))
-		ss.writeMsg(stream, errMsg)
+		ss.writeMsg(stream, errMsg, addr)
 		return err
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(msg.Data)
 	if err != nil {
 		errMsg = "failed to unmarshal registration data"
 		log.Error(errMsg, logger.Err(err))
-		ss.writeMsg(stream, errMsg)
+		ss.writeMsg(stream, errMsg, addr)
 		return err
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
@@ -78,7 +79,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return errs.NewAppError(op, err)
 	}
 	log.Info("user registered", logger.Attr("userID", regMsg.ID))
-	if err := ss.writeMsg(stream, "success"); err != nil {
+	if err := ss.writeMsg(stream, "success", addr); err != nil {
 		return errs.NewAppError(op, err)
 	}
 	defer func() {
@@ -127,7 +128,7 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 				}()
 			default:
 				log.Error("unknown command", logger.Attr("msgType", msg.Type))
-				ss.writeMsg(stream, "unknown command")
+				ss.writeMsg(stream, "unknown command", addr)
 			}
 		}
 	}
@@ -137,9 +138,10 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	op := "signalService.proxing"
 	log := ss.Logger.AddOp(op)
 	log.Info("proxing...")
+	userAddr := conn.RemoteAddr().String()
 	connMsg, err := protocols.ToConnectToUserMessage(connectData)
 	if err != nil {
-		ss.writeMsg(stream, "failed to unmarshal connection data")
+		ss.writeMsg(stream, "failed to unmarshal connection data", userAddr)
 		return errs.NewAppError(op, err)
 	}
 	log.Info("getting receiver connecting")
@@ -148,7 +150,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	if err != nil {
 		errMsg = "failed to get receiver"
 		log.Error(errMsg, logger.Err(err))
-		ss.writeMsg(stream, err.Error())
+		ss.writeMsg(stream, err.Error(), userAddr)
 		return errs.NewAppError(op, err)
 	}
 	log.Info("opening receivers stream")
@@ -156,23 +158,23 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	if err != nil {
 		errMsg = "failed to open receiver stream"
 		log.Error(errMsg, logger.Err(err))
-		ss.writeMsg(stream, errMsg)
+		ss.writeMsg(stream, errMsg, userAddr)
 		return errs.NewAppError(op, err)
 	}
+	receiverAddr := receiverConn.RemoteAddr().String()
 	log.Info("opening users stream")
 	userStream, err := conn.OpenStreamSync(ctx)
 	if err != nil {
 		errMsg = "failed to open user stream"
 		log.Error(errMsg, logger.Err(err))
-		ss.writeMsg(stream, errMsg)
+		ss.writeMsg(stream, errMsg, receiverAddr)
 		return errs.NewAppError(op, err)
 	}
-	userAddr := conn.RemoteAddr().String()
-	receiverAddr := receiverConn.RemoteAddr().String()
-	if cErr := ss.writeMsg(receiverStream, fmt.Sprintf("new connection with: %s\n", userAddr)); cErr != nil {
+
+	if cErr := ss.writeMsg(receiverStream, fmt.Sprintf("new connection with: %s\n", userAddr), receiverAddr); cErr != nil {
 		return errs.NewAppError(op, cErr)
 	}
-	if cErr := ss.writeMsg(userStream, fmt.Sprintf("new connection with: %s\n", receiverAddr)); cErr != nil {
+	if cErr := ss.writeMsg(userStream, fmt.Sprintf("new connection with: %s\n", receiverAddr), userAddr); cErr != nil {
 		return errs.NewAppError(op, cErr)
 	}
 	logUserAddr := logger.Attr("userAddress", userAddr)
@@ -187,7 +189,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 		_, err := io.Copy(rs, us)
 		errChan <- err
 	}(userStream, receiverStream)
-	if err := ss.writeMsg(stream, "connected successfully"); err != nil {
+	if err := ss.writeMsg(stream, "connected successfully", userAddr); err != nil {
 		return errs.NewAppError(op, err)
 	}
 	res := <-errChan
@@ -243,7 +245,7 @@ func (ss *signalService) checkErr(err error) error {
 }
 
 // TODO WRITE CLIENT ERRORS
-func (ss *signalService) writeMsg(stream *quic.Stream, msg string) error {
+func (ss *signalService) writeMsg(stream *quic.Stream, addr string, msg string) error {
 	op := "signalService.writeMsg"
 	log := ss.Logger.AddOp(op)
 	log.Info("writting message...")
@@ -251,6 +253,6 @@ func (ss *signalService) writeMsg(stream *quic.Stream, msg string) error {
 		log.Error("failed to write message", logger.Err(err))
 		return errs.NewAppError(op, err)
 	}
-	log.Info("message written", logger.Attr("streamId", stream.StreamID()))
+	log.Info("message written", logger.Attr("streamId", stream.StreamID()), logger.Attr("address", addr))
 	return nil
 }
