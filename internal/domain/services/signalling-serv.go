@@ -79,7 +79,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return errs.NewAppError(op, err)
 	}
 	log.Info("user registered", logger.Attr("userID", regMsg.ID))
-	if err := ss.writeMsg(stream, "success", addr); err != nil {
+	if err := ss.writeMsg(stream, "success\n", addr); err != nil {
 		return errs.NewAppError(op, err)
 	}
 	defer func() {
