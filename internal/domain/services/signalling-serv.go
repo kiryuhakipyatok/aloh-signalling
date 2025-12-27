@@ -75,7 +75,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return err
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
-		log.Error("failed to store connect", logger.Attr("address", regMsg.ID))
+		log.Error("failed to store connect", logger.Attr("userID", regMsg.ID))
 		return errs.NewAppError(op, err)
 	}
 	log.Info("user registered", logger.Attr("userID", regMsg.ID))
@@ -84,9 +84,9 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, regMsg.ID); err != nil {
-			log.Error("failed to delete connect", logger.Attr("address", regMsg.ID))
+			log.Error("failed to delete connect", logger.Attr("userID", regMsg.ID))
 		}
-		log.Info("connect is deleted", logger.Attr("id", regMsg.ID))
+		log.Info("connect is deleted", logger.Attr("userID", regMsg.ID))
 	}()
 	return ss.commandLoop(ctx, decoder, stream, conn)
 }
@@ -161,6 +161,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 		ss.writeMsg(stream, errMsg, userAddr)
 		return errs.NewAppError(op, err)
 	}
+	log.Info("receivers stream is opened")
 	receiverAddr := receiverConn.RemoteAddr().String()
 	log.Info("opening users stream")
 	userStream, err := conn.OpenStreamSync(ctx)
@@ -170,7 +171,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 		ss.writeMsg(stream, errMsg, receiverAddr)
 		return errs.NewAppError(op, err)
 	}
-
+	log.Info("users stream is opened")
 	if cErr := ss.writeMsg(receiverStream, fmt.Sprintf("new connection with: %s\n", userAddr), receiverAddr); cErr != nil {
 		return errs.NewAppError(op, cErr)
 	}
