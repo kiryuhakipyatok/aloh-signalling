@@ -251,6 +251,6 @@ func (ss *signalService) writeMsg(stream *quic.Stream, msg string) error {
 		log.Error("failed to write message", logger.Err(err))
 		return errs.NewAppError(op, err)
 	}
-	log.Info("message written", logger.Attr("streamId", stream.StreamID().InitiatedBy().String()))
+	log.Info("message written", logger.Attr("streamId", stream.StreamID()))
 	return nil
 }

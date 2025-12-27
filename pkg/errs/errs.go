@@ -19,7 +19,7 @@ type AppError struct {
 }
 
 func (ae AppError) Error() string {
-	return fmt.Sprintf("op: %s, error: %v", ae.Op, ae.Err.Error())
+	return fmt.Sprintf("error: %v", ae.Err.Error())
 }
 
 func NewAppError(op string, err error) AppError {
