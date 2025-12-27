@@ -245,7 +245,7 @@ func (ss *signalService) checkErr(err error) error {
 }
 
 // TODO WRITE CLIENT ERRORS
-func (ss *signalService) writeMsg(stream *quic.Stream, addr string, msg string) error {
+func (ss *signalService) writeMsg(stream *quic.Stream, msg string, addr string) error {
 	op := "signalService.writeMsg"
 	log := ss.Logger.AddOp(op)
 	log.Info("writting message...")
