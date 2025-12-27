@@ -1,7 +1,7 @@
 app:
   name: "aloh"
   version: "1.0.0"
-  env: "local"
+  env: "dev"
 
 server:
   host: "localhost"
