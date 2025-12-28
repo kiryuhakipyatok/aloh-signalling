@@ -1,6 +1,6 @@
 services:
   aloh:
-    #build: .
+    # build: .
     image: aloh-image:latest
     container_name: aloh
     env_file:

@@ -3,6 +3,7 @@ package logger
 import (
 	"log/slog"
 	"os"
+	"test/internal/config"
 )
 
 type Logger struct {
@@ -15,8 +16,9 @@ const (
 	prod  = "prod"
 )
 
-func NewLogger(env string) *Logger {
+func NewLogger(cfg config.App) *Logger {
 	var log *slog.Logger
+	env := cfg.Env
 
 	switch env {
 	case local:
@@ -28,7 +30,11 @@ func NewLogger(env string) *Logger {
 	}
 
 	logger := &Logger{
-		log.With(slog.String("env", env)),
+		log.With(
+			slog.String("env", env),
+			slog.String("app", cfg.Name),
+			slog.String("varsion", cfg.Version),
+		),
 	}
 	return logger
 }
