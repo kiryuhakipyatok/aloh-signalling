@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"test/internal/config"
@@ -66,19 +67,25 @@ func NewServer(cfg config.Server, l *logger.Logger) *Server {
 }
 
 func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context.Context, conn *quic.Conn) error) {
-	log := s.Logger.AddOp("server.AcceptConnections")
+	op := "server.AcceptConnections"
+	log := s.Logger.AddOp(op)
 	log.Info("accepting connections...")
 	var addr string
 	for {
+
 		conn, err := s.Listener.Accept(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+				return
+			}
 			log.Error("failed to accept connection", logger.Err(err))
+			continue
 		} else {
 			addr = conn.RemoteAddr().String()
 			log.Info("new connection", logger.Attr("address", conn.RemoteAddr().String()))
 		}
-		go func(addr string) {
-			if err := handler(ctx, conn); err != nil {
+		go func(c *quic.Conn, addr string) {
+			if err := handler(ctx, c); err != nil {
 				log.Error("failed to serve connection", logger.Attr("address", addr), logger.Err(err))
 				conn.CloseWithError(1, err.Error())
 				log.Info("connection closed with error", logger.Err(err))
@@ -88,8 +95,9 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 				log.Info("connection closed without error", logger.Attr("address", addr))
 				return
 			}
-		}(addr)
+		}(conn, addr)
 	}
+
 }
 
 func (s *Server) Close() {

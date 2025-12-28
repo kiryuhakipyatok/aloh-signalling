@@ -32,8 +32,9 @@ func NewSignallingService(cr repository.ConnectionsRepo, l *logger.Logger) Signa
 }
 
 const (
-	regType  = "reg"
-	connType = "conn"
+	regType     = "reg"
+	connType    = "conn"
+	disconnType = "disconn"
 )
 
 func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) error {
@@ -79,7 +80,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return errs.NewAppError(op, err)
 	}
 	log.Info("user registered", logger.Attr("userID", regMsg.ID))
-	if err := ss.writeMsg(stream, "success\n", addr); err != nil {
+	if err := ss.writeMsg(stream, "success", addr); err != nil {
 		return errs.NewAppError(op, err)
 	}
 	defer func() {
@@ -105,7 +106,7 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 	}()
 	select {
 	case <-stream.Context().Done():
-		log.Info("command stream is closed")
+		log.Info("command stream is done")
 		return nil
 	default:
 		for {
@@ -126,6 +127,13 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 						return
 					}
 				}()
+			case disconnType:
+				if err := conn.CloseWithError(0, "user disconnected"); err != nil {
+					log.Error("faield to disconnect user", logger.Err(err))
+					return err
+				}
+				log.Info("user disconnected successfully", logger.Attr("address", addr))
+				return nil
 			default:
 				log.Error("unknown command", logger.Attr("msgType", msg.Type))
 				ss.writeMsg(stream, "unknown command", addr)
@@ -245,12 +253,11 @@ func (ss *signalService) checkErr(err error) error {
 
 }
 
-// TODO WRITE CLIENT ERRORS
 func (ss *signalService) writeMsg(stream *quic.Stream, msg string, addr string) error {
 	op := "signalService.writeMsg"
 	log := ss.Logger.AddOp(op)
 	log.Info("writting message...")
-	if _, err := stream.Write([]byte(msg)); err != nil {
+	if _, err := stream.Write([]byte(msg + "\n")); err != nil {
 		log.Error("failed to write message", logger.Err(err))
 		return errs.NewAppError(op, err)
 	}
