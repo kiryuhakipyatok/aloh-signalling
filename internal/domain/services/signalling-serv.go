@@ -43,7 +43,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	log.Info("connection serving...", logger.Attr("address", conn.RemoteAddr()))
 	stream, err := conn.AcceptStream(ctx)
 	if err != nil {
-		if cErr := ss.checkErr(err); cErr != nil {
+		if cErr := ss.checkErr(ctx, err); cErr != nil {
 			log.Error("failed to accept stream", logger.Err(cErr))
 			return cErr
 		}
@@ -113,7 +113,7 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 			var msg protocols.Message
 			err := decoder.Decode(&msg)
 			if err != nil {
-				if cErr := ss.checkErr(err); cErr != nil {
+				if cErr := ss.checkErr(ctx, err); cErr != nil {
 					log.Error("failed to decode msg", logger.Err(err))
 					return errs.NewAppError(op, cErr)
 				}
@@ -190,27 +190,26 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	logReceiverAddr := logger.Attr("receiverAddress", receiverAddr)
 	log.Info("users are connected", logUserAddr, logReceiverAddr)
 	errChan := make(chan error, 2)
-	go func(us, rs *quic.Stream) {
-		_, err := io.Copy(us, rs)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_, err := io.Copy(userStream, receiverStream)
 		errChan <- err
-	}(userStream, receiverStream)
-	go func(us, rs *quic.Stream) {
-		_, err := io.Copy(rs, us)
+	})
+	wg.Go(func() {
+		_, err := io.Copy(receiverStream, userStream)
 		errChan <- err
-	}(userStream, receiverStream)
+	})
 	if err := ss.writeMsg(stream, "connected successfully", userAddr); err != nil {
 		return errs.NewAppError(op, err)
 	}
 	res := <-errChan
 	if res != nil {
-		if err := ss.checkErr(res); err != nil {
+		if err := ss.checkErr(ctx, res); err != nil {
 			log.Error("proxing connection is broken", logger.Err(err))
 		} else {
 			log.Info("proxing connection closed normally")
 		}
 	}
-
-	var wg sync.WaitGroup
 
 	wg.Go(func() {
 		log.Info("user stream closing...", logUserAddr)
@@ -232,11 +231,13 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	return nil
 }
 
-func (ss *signalService) checkErr(err error) error {
+func (ss *signalService) checkErr(ctx context.Context, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+		return nil
+	}
 	op := "signalService.checkErr"
 	log := ss.Logger.AddOp(op)
 	log.Info("error checking...")
-
 	if errors.Is(err, io.EOF) {
 		log.Info("connection closed (EOF)")
 		return nil

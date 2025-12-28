@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"test/internal/config"
 	"test/pkg/logger"
 
@@ -70,7 +71,13 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 	op := "server.AcceptConnections"
 	log := s.Logger.AddOp(op)
 	log.Info("accepting connections...")
-	var addr string
+	var (
+		addr string
+		wg   sync.WaitGroup
+	)
+	go func() {
+		wg.Wait()
+	}()
 	for {
 		conn, err := s.Listener.Accept(ctx)
 		if err != nil {
@@ -83,8 +90,8 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 			addr = conn.RemoteAddr().String()
 			log.Info("new connection", logger.Attr("address", conn.RemoteAddr().String()))
 		}
-		go func(c *quic.Conn, addr string) {
-			if err := handler(ctx, c); err != nil {
+		wg.Go(func() {
+			if err := handler(ctx, conn); err != nil {
 				log.Error("failed to serve connection", logger.Attr("address", addr), logger.Err(err))
 				conn.CloseWithError(1, err.Error())
 				log.Info("connection closed with error", logger.Err(err))
@@ -94,7 +101,19 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 				log.Info("connection closed without error", logger.Attr("address", addr))
 				return
 			}
-		}(conn, addr)
+		})
+		// go func(c *quic.Conn, addr string) {
+		// 	if err := handler(ctx, c); err != nil {
+		// 		log.Error("failed to serve connection", logger.Attr("address", addr), logger.Err(err))
+		// 		conn.CloseWithError(1, err.Error())
+		// 		log.Info("connection closed with error", logger.Err(err))
+		// 		return
+		// 	} else {
+		// 		conn.CloseWithError(0, "connection closed without error")
+		// 		log.Info("connection closed without error", logger.Attr("address", addr))
+		// 		return
+		// 	}
+		// }(conn, addr)
 	}
 
 }
