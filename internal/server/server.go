@@ -72,7 +72,6 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 	log.Info("accepting connections...")
 	var addr string
 	for {
-
 		conn, err := s.Listener.Accept(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
