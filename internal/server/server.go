@@ -52,6 +52,7 @@ func NewServer(cfg config.Server, l *logger.Logger) *Server {
 	}
 	quicConfig := &quic.Config{
 		MaxIdleTimeout:       cfg.IdleTimeout,
+		MaxIncomingStreams:   1000,
 		HandshakeIdleTimeout: cfg.HandshakeTimeout,
 		KeepAlivePeriod:      cfg.KeepAlivePeriodTimeout,
 		Tracer:               qlog.DefaultConnectionTracer,
@@ -102,18 +103,6 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 				return
 			}
 		})
-		// go func(c *quic.Conn, addr string) {
-		// 	if err := handler(ctx, c); err != nil {
-		// 		log.Error("failed to serve connection", logger.Attr("address", addr), logger.Err(err))
-		// 		conn.CloseWithError(1, err.Error())
-		// 		log.Info("connection closed with error", logger.Err(err))
-		// 		return
-		// 	} else {
-		// 		conn.CloseWithError(0, "connection closed without error")
-		// 		log.Info("connection closed without error", logger.Attr("address", addr))
-		// 		return
-		// 	}
-		// }(conn, addr)
 	}
 
 }

@@ -12,7 +12,7 @@ import (
 type ConnectionsRepo interface {
 	AddConnect(ctx context.Context, id string, conn *quic.Conn) error
 	DeleteConnect(ctx context.Context, id string) error
-	GetConnect(ctx context.Context, id string) (*quic.Conn, error)
+	GetConnects(ctx context.Context, ids []string) ([]*quic.Conn, error)
 }
 
 type connectionsRepo struct {
@@ -49,20 +49,24 @@ func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id string) error {
 	}
 }
 
-func (cr *connectionsRepo) GetConnect(ctx context.Context, id string) (*quic.Conn, error) {
+func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]*quic.Conn, error) {
 	op := "connectionsRepo.GetConnect"
+	connects := []*quic.Conn{}
 	select {
 	case <-ctx.Done():
 		return nil, errs.ErrRequestTimeout(op)
 	default:
-		val, ok := cr.Load(id)
-		if !ok {
-			return nil, errs.ErrNotFound(op)
+		for _, id := range ids {
+			val, ok := cr.Load(id)
+			if !ok {
+				return nil, errs.ErrNotFound(op)
+			}
+			conn, ok := val.(*quic.Conn)
+			if !ok {
+				return nil, errors.New("invalid value type")
+			}
+			connects = append(connects, conn)
 		}
-		conn, ok := val.(*quic.Conn)
-		if !ok {
-			return nil, errors.New("invalid value type")
-		}
-		return conn, nil
+		return connects, nil
 	}
 }

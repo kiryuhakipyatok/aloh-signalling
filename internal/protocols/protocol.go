@@ -12,7 +12,7 @@ type RegisterConnectMessage struct {
 }
 
 type ConnectToUserMessage struct {
-	RecevierID string `json:"id"`
+	RecevierIDs []string `json:"ids"`
 }
 
 func ToRegisterConnectMessage(data json.RawMessage) (*RegisterConnectMessage, error) {
