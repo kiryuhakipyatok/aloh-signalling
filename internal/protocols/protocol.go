@@ -1,6 +1,9 @@
 package protocols
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"test/pkg/errs"
+)
 
 type Message struct {
 	Type string          `json:"type"`
@@ -16,17 +19,19 @@ type ConnectToUserMessage struct {
 }
 
 func ToRegisterConnectMessage(data json.RawMessage) (*RegisterConnectMessage, error) {
+	op := "protocols.ToRegisterConnectMessage"
 	regMsg := &RegisterConnectMessage{}
 	if err := json.Unmarshal(data, regMsg); err != nil {
-		return nil, err
+		return nil, errs.ErrInvalidProtocol(op)
 	}
 	return regMsg, nil
 }
 
 func ToConnectToUserMessage(data json.RawMessage) (*ConnectToUserMessage, error) {
+	op := "protocols.ToConnectToUserMessage"
 	connectMsg := &ConnectToUserMessage{}
 	if err := json.Unmarshal(data, connectMsg); err != nil {
-		return nil, err
+		return nil, errs.ErrInvalidProtocol(op)
 	}
 	return connectMsg, nil
 }

@@ -6,11 +6,13 @@ import (
 )
 
 var (
-	ErrWriteMsgBase       = errors.New("failed to write message")
-	ErrDecodeMsgBase      = errors.New("failed to decode message")
-	ErrNotFoundBase       = errors.New("not found")
-	ErrAlreadyExistsBase  = errors.New("already exists")
-	ErrRequestTimeoutBase = errors.New("request timeout")
+	ErrWriteMsgBase         = errors.New("failed to write message")
+	ErrDecodeMsgBase        = errors.New("failed to decode message")
+	ErrNotFoundBase         = errors.New("not found")
+	ErrAlreadyExistsBase    = errors.New("already exists")
+	ErrRequestTimeoutBase   = errors.New("request timeout")
+	ErrWrongMessageTypeBase = errors.New("wrong message type")
+	ErrInvalidProtocolBase  = errors.New("invalid protocol")
 )
 
 type AppError struct {
@@ -47,4 +49,12 @@ func ErrAlreadyExists(op string) AppError {
 
 func ErrRequestTimeout(op string) AppError {
 	return AppError{Op: op, Err: ErrRequestTimeoutBase}
+}
+
+func ErrWrongMessageType(op string) AppError {
+	return AppError{Op: op, Err: ErrWrongMessageTypeBase}
+}
+
+func ErrInvalidProtocol(op string) AppError {
+	return AppError{Op: op, Err: ErrInvalidProtocolBase}
 }

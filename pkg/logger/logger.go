@@ -33,7 +33,7 @@ func NewLogger(cfg config.App) *Logger {
 		log.With(
 			slog.String("env", env),
 			slog.String("app", cfg.Name),
-			slog.String("varsion", cfg.Version),
+			slog.String("version", cfg.Version),
 		),
 	}
 	return logger
