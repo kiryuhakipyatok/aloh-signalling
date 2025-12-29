@@ -197,23 +197,28 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 
 			wg.Go(func() {
 				_, err := io.Copy(userStream, receiverStream)
-				errChan <- err
+				if err != nil {
+					errChan <- err
+				}
+
 			})
 			wg.Go(func() {
 				_, err := io.Copy(receiverStream, userStream)
-				errChan <- err
+				if err != nil {
+					errChan <- err
+				}
+
 			})
 			log.Info("users are connected", logUserAddr, logReceiverAddr)
 			if err := ss.writeMsg(stream, "connected successfully", userAddr); err != nil {
 				gErrChan <- errs.NewAppError(op, err)
 			}
 			res := <-errChan
-			if res != nil {
-				if err := ss.checkErr(ctx, res); err != nil {
-					log.Error("proxing connection is broken", logger.Err(err))
-				} else {
-					log.Info("proxing connection closed normally")
-				}
+
+			if err := ss.checkErr(ctx, res); err != nil {
+				log.Error("proxing connection is broken", logger.Err(err))
+			} else {
+				log.Info("proxing connection closed normally")
 			}
 
 			wg.Go(func() {
