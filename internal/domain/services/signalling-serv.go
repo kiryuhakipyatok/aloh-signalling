@@ -93,7 +93,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 }
 
 func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder, stream *quic.Stream, conn *quic.Conn) error {
-	op := "commandLoop"
+	op := "signalService.commandLoop"
 	log := ss.Logger.AddOp(op)
 	log.Info("serving connection in command loop...")
 	addr := conn.RemoteAddr().String()
@@ -145,6 +145,7 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, connectData []byte, conn *quic.Conn) error {
 	op := "signalService.proxing"
 	log := ss.Logger.AddOp(op)
+
 	log.Info("proxing...")
 	userAddr := conn.RemoteAddr().String()
 	connMsg, err := protocols.ToConnectToUserMessage(connectData)
@@ -160,6 +161,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 		ss.writeMsg(stream, err.Error(), userAddr)
 		return errs.NewAppError(op, err)
 	}
+
 	gErrChan := make(chan error, 1)
 	var wg sync.WaitGroup
 	log.Info("opening receivers streams")

@@ -53,6 +53,7 @@ func NewServer(cfg config.Server, l *logger.Logger) *Server {
 	quicConfig := &quic.Config{
 		MaxIdleTimeout:       cfg.IdleTimeout,
 		MaxIncomingStreams:   1000,
+		EnableDatagrams:      true,
 		HandshakeIdleTimeout: cfg.HandshakeTimeout,
 		KeepAlivePeriod:      cfg.KeepAlivePeriodTimeout,
 		Tracer:               qlog.DefaultConnectionTracer,
