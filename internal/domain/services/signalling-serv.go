@@ -32,11 +32,11 @@ func NewSignallingService(cr repository.ConnectionsRepo, l *logger.Logger) Signa
 }
 
 const (
-	regType     = "reg"
-	connType    = "conn"
-	disconnType = "disconn"
+	REGTYPE     = "reg"
+	CONNTYPE    = "conn"
+	DISCONNTYPE = "disconn"
 
-	maxP2PUsers = 3
+	MAXP2PUSERS = 3
 )
 
 func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) error {
@@ -64,7 +64,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		ss.writeMsg(stream, errMsg, addr)
 		return errs.ErrDecodeMsg(op)
 	}
-	if msg.Type != regType {
+	if msg.Type != REGTYPE {
 		err = errs.ErrWrongMessageType(op)
 		log.Error(errMsg, logger.Attr("msgType", msg.Type), logger.Err(err))
 		ss.writeMsg(stream, err.Error(), addr)
@@ -122,14 +122,14 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 				return nil
 			}
 			switch msg.Type {
-			case connType:
+			case CONNTYPE:
 				go func() {
 					if err := ss.proxing(ctx, stream, msg.Data, conn); err != nil {
 						log.Error("proxing failed", logger.Err(err))
 						return
 					}
 				}()
-			case disconnType:
+			case DISCONNTYPE:
 				if err := conn.CloseWithError(0, "user disconnected"); err != nil {
 					log.Error("faield to disconnect user", logger.Err(err))
 					return err
@@ -167,7 +167,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	gErrChan := make(chan error, 1)
 	var gWg sync.WaitGroup
 	for _, rConn := range receiverConns {
-		if len(receiverConns) <= maxP2PUsers {
+		if len(receiverConns) <= MAXP2PUSERS {
 			gWg.Go(func() {
 				ss.streamProxing(ctx, conn, rConn, stream, gErrChan)
 			})
