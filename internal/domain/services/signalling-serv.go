@@ -35,6 +35,8 @@ const (
 	regType     = "reg"
 	connType    = "conn"
 	disconnType = "disconn"
+
+	maxP2PUsers = 3
 )
 
 func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) error {
@@ -163,24 +165,20 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, conne
 	}
 
 	gErrChan := make(chan error, 1)
-	var wg sync.WaitGroup
-	log.Info("opening receivers streams")
+	var gWg sync.WaitGroup
 	for _, rConn := range receiverConns {
-		// if len(receiverConns) > 3 {
-		// wg.Go(func() {
-		// 	ss.datagramProxing(ctx, conn, rConn, gErrChan)
-		// })
-		// } else {
-		// 	wg.Go(func() {
-		// 		ss.streamProxing(ctx, &wg, conn, rConn, stream, gErrChan)
-		// 	})
-		// }
-		wg.Go(func() {
-			ss.streamProxing(ctx, &wg, conn, rConn, stream, gErrChan)
-		})
+		if len(receiverConns) <= maxP2PUsers {
+			gWg.Go(func() {
+				ss.streamProxing(ctx, conn, rConn, stream, gErrChan)
+			})
+		} else {
+			gWg.Go(func() {
+				ss.datagramProxing(ctx, stream, conn, rConn, gErrChan)
+			})
+		}
 	}
 	go func() {
-		wg.Wait()
+		gWg.Wait()
 		close(gErrChan)
 	}()
 	if err = <-gErrChan; err != nil {
@@ -224,112 +222,140 @@ func (ss *signalService) writeMsg(stream *quic.Stream, msg string, addr string) 
 	return nil
 }
 
-func (ss *signalService) datagramProxing(ctx context.Context, uConn, rConn *quic.Conn, gErrChan chan error) error {
-	op := "signalService.DatagramStream"
+func (ss *signalService) datagramProxing(ctx context.Context, stream *quic.Stream, uConn, rConn *quic.Conn, gErrChan chan error) {
+	op := "signalService.datagramStream"
 	log := ss.Logger.AddOp(op)
 	log.Info("datagram proxing...")
 	rAddr := rConn.RemoteAddr().String()
 	uAddr := uConn.RemoteAddr().String()
-	if err := rConn.SendDatagram([]byte("new datagram from user")); err != nil {
-		log.Error("failed to send datagram", logger.Err(err), logger.Attr("address", rAddr))
+	errChan := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := rConn.SendDatagram([]byte(fmt.Sprintf("new datagram connect with: %s", uAddr))); err != nil {
+			errChan <- err
+			return
+		}
+		log.Info("user's datagram pipe is opened", logger.Attr("address", uAddr))
+
+		for {
+			p, err := uConn.ReceiveDatagram(ctx)
+			if err != nil {
+				errChan <- err
+				break
+			}
+			if err := rConn.SendDatagram([]byte(p)); err != nil {
+				errChan <- err
+				break
+			}
+		}
+	})
+	wg.Go(func() {
+		if err := uConn.SendDatagram([]byte(fmt.Sprintf("new datagram connect with: %s", rAddr))); err != nil {
+			errChan <- err
+			return
+		}
+		log.Info("receiver's datagram pipe is opened", logger.Attr("address", rAddr))
+		for {
+			p, err := rConn.ReceiveDatagram(ctx)
+			if err != nil {
+				errChan <- err
+				break
+			}
+			if err := uConn.SendDatagram([]byte(p)); err != nil {
+				errChan <- err
+				break
+			}
+		}
+	})
+
+	log.Info("users are connected with datagram pipes", logger.Attr("address", uAddr), logger.Attr("address", rAddr))
+	if err := ss.writeMsg(stream, "connected successfully", uAddr); err != nil {
 		gErrChan <- errs.NewAppError(op, err)
 	}
-	if err := uConn.SendDatagram([]byte("new datagram from receiver")); err != nil {
-		log.Error("failed to send datagram", logger.Err(err), logger.Attr("address", rAddr))
-		gErrChan <- errs.NewAppError(op, err)
+	res := <-errChan
+	if err := ss.checkErr(ctx, res); err != nil {
+		log.Error("proxing connection is broken", logger.Err(err))
+	} else {
+		log.Info("proxing connection closed normally")
 	}
-	for {
-		p, err := uConn.ReceiveDatagram(ctx)
-		if err != nil {
-			log.Error("failed to receive datagram", logger.Err(err), logger.Attr("address", uAddr))
-			gErrChan <- errs.NewAppError(op, err)
-		}
-		fmt.Println(string(p))
-		if err := rConn.SendDatagram(p); err != nil {
-			log.Error("failed to send datagram", logger.Err(err), logger.Attr("address", rAddr))
-			gErrChan <- errs.NewAppError(op, err)
-		}
-	}
+	wg.Wait()
 }
 
-func (ss *signalService) streamProxing(ctx context.Context, wg *sync.WaitGroup, uConn, rConn *quic.Conn, stream *quic.Stream, gErrChan chan error) {
+func (ss *signalService) streamProxing(ctx context.Context, uConn, rConn *quic.Conn, stream *quic.Stream, gErrChan chan error) {
 	op := "signalService.streamProxing"
 	log := ss.Logger.AddOp(op)
 	log.Info("stream proxing...")
 	userAddr := uConn.RemoteAddr().String()
+	receiverAddr := rConn.RemoteAddr().String()
+	logUserAddr := logger.Attr("userAddress", userAddr)
+	logReceiverAddr := logger.Attr("receiverAddress", receiverAddr)
+	receiverStream, err := rConn.OpenStreamSync(ctx)
+	var errMsg string
+	if err != nil {
+		errMsg = "failed to open receiver's stream"
+		log.Error(errMsg, logger.Err(err), logReceiverAddr)
+		ss.writeMsg(stream, errMsg, receiverAddr)
+		gErrChan <- errs.NewAppError(op, err)
+	}
+	log.Info("receiver's stream is opened")
+	log.Info("opening user's stream")
+	userStream, err := uConn.OpenStreamSync(ctx)
+	if err != nil {
+		errMsg = "failed to open user's stream"
+		log.Error(errMsg, logger.Err(err))
+		ss.writeMsg(stream, errMsg, userAddr)
+		gErrChan <- errs.NewAppError(op, err)
+	}
+	log.Info("user's stream is opened", logUserAddr)
+	if cErr := ss.writeMsg(receiverStream, fmt.Sprintf("new connection with: %s\n", userAddr), receiverAddr); cErr != nil {
+		gErrChan <- errs.NewAppError(op, cErr)
+	}
+	if cErr := ss.writeMsg(userStream, fmt.Sprintf("new connection with: %s\n", receiverAddr), userAddr); cErr != nil {
+		gErrChan <- errs.NewAppError(op, cErr)
+	}
+
+	errChan := make(chan error, 2)
+	var wg sync.WaitGroup
 	wg.Go(func() {
-		receiverAddr := rConn.RemoteAddr().String()
-		logUserAddr := logger.Attr("userAddress", userAddr)
-		logReceiverAddr := logger.Attr("receiverAddress", receiverAddr)
-		receiverStream, err := rConn.OpenStreamSync(ctx)
-		var errMsg string
+		_, err := io.Copy(userStream, receiverStream)
 		if err != nil {
-			errMsg = "failed to open receiver's stream"
-			log.Error(errMsg, logger.Err(err), logReceiverAddr)
-			ss.writeMsg(stream, errMsg, receiverAddr)
-			gErrChan <- errs.NewAppError(op, err)
+			errChan <- err
 		}
-		log.Info("receiver's stream is opened")
-		log.Info("opening user's stream")
-		userStream, err := uConn.OpenStreamSync(ctx)
-		if err != nil {
-			errMsg = "failed to open user's stream"
-			log.Error(errMsg, logger.Err(err))
-			ss.writeMsg(stream, errMsg, userAddr)
-			gErrChan <- errs.NewAppError(op, err)
-		}
-		log.Info("user's stream is opened", logUserAddr)
-		if cErr := ss.writeMsg(receiverStream, fmt.Sprintf("new connection with: %s\n", userAddr), receiverAddr); cErr != nil {
-			gErrChan <- errs.NewAppError(op, cErr)
-		}
-		if cErr := ss.writeMsg(userStream, fmt.Sprintf("new connection with: %s\n", receiverAddr), userAddr); cErr != nil {
-			gErrChan <- errs.NewAppError(op, cErr)
-		}
-
-		errChan := make(chan error, 2)
-
-		wg.Go(func() {
-			_, err := io.Copy(userStream, receiverStream)
-			if err != nil {
-				errChan <- err
-			}
-
-		})
-		wg.Go(func() {
-			_, err := io.Copy(receiverStream, userStream)
-			if err != nil {
-				errChan <- err
-			}
-
-		})
-		log.Info("users are connected", logUserAddr, logReceiverAddr)
-		if err := ss.writeMsg(stream, "connected successfully", userAddr); err != nil {
-			gErrChan <- errs.NewAppError(op, err)
-		}
-		res := <-errChan
-
-		if err := ss.checkErr(ctx, res); err != nil {
-			log.Error("proxing connection is broken", logger.Err(err))
-		} else {
-			log.Info("proxing connection closed normally")
-		}
-
-		wg.Go(func() {
-			log.Info("user's stream closing...", logUserAddr)
-			if err := userStream.Close(); err != nil {
-				log.Error("failed to close user's stream", logger.Err(err), logUserAddr)
-			} else {
-				log.Info("user's stream is closed", logUserAddr)
-			}
-		})
-		wg.Go(func() {
-			log.Info("receiver's stream closing...", logReceiverAddr)
-			if err := receiverStream.Close(); err != nil {
-				log.Error("failed to close receiver's stream", logger.Err(err), logReceiverAddr)
-			} else {
-				log.Info("receiver's stream is closed", logReceiverAddr)
-			}
-		})
 
 	})
+	wg.Go(func() {
+		_, err := io.Copy(receiverStream, userStream)
+		if err != nil {
+			errChan <- err
+		}
+
+	})
+	log.Info("users are connected with streams", logUserAddr, logReceiverAddr)
+	if err := ss.writeMsg(stream, "connected successfully", userAddr); err != nil {
+		gErrChan <- errs.NewAppError(op, err)
+	}
+	res := <-errChan
+	if err := ss.checkErr(ctx, res); err != nil {
+		log.Error("proxing connection is broken", logger.Err(err))
+	} else {
+		log.Info("proxing connection closed normally")
+	}
+	wg.Go(func() {
+		log.Info("user's stream closing...", logUserAddr)
+		if err := userStream.Close(); err != nil {
+			log.Error("failed to close user's stream", logger.Err(err), logUserAddr)
+		} else {
+			log.Info("user's stream is closed", logUserAddr)
+		}
+	})
+	wg.Go(func() {
+		log.Info("receiver's stream closing...", logReceiverAddr)
+		if err := receiverStream.Close(); err != nil {
+			log.Error("failed to close receiver's stream", logger.Err(err), logReceiverAddr)
+		} else {
+			log.Info("receiver's stream is closed", logReceiverAddr)
+		}
+	})
+	wg.Wait()
+
 }
