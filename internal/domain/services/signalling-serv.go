@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"test/internal/domain/repository"
@@ -66,6 +67,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		ss.writeMsg(stream, streamErr, addr)
 		return errs.ErrDecodeMsg(op)
 	}
+	fmt.Println(msg)
 	if msg.Type != regType {
 		err = errs.ErrWrongMessageType(op)
 		log.Error(errMsg, logger.Attr("msgType", msg.Type), logger.Err(err))
