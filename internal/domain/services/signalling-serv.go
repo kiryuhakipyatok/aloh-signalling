@@ -10,6 +10,7 @@ import (
 	"test/internal/protocols"
 	"test/pkg/errs"
 	"test/pkg/logger"
+	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -64,7 +65,8 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		// return errs.ErrDecodeMsg(op)
+		time.Sleep(time.Second * 10)
+		return errs.ErrDecodeMsg(op)
 	}
 	if msg.Type != regType {
 		err = errs.ErrWrongMessageType(op)
@@ -75,7 +77,8 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		// return err
+		time.Sleep(time.Second * 10)
+		return err
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(msg.Data)
 	if err != nil {
@@ -87,7 +90,8 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		// return err
+		time.Sleep(time.Second * 10)
+		return err
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
 		log.Error(err.Error(), logger.Attr("userID", regMsg.ID))
@@ -97,11 +101,12 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		// return errs.NewAppError(op, err)
+		time.Sleep(time.Second * 10)
+		return errs.NewAppError(op, err)
 	}
 	log.Info("user is registered", logger.Attr("userID", regMsg.ID))
 	if err := ss.writeMsg(stream, []byte("success"), addr); err != nil {
-		// return errs.NewAppError(op, err)
+		return errs.NewAppError(op, err)
 	}
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, regMsg.ID); err != nil {
