@@ -64,7 +64,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		return errs.ErrDecodeMsg(op)
+		// return errs.ErrDecodeMsg(op)
 	}
 	if msg.Type != regType {
 		err = errs.ErrWrongMessageType(op)
@@ -75,19 +75,19 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		return err
+		// return err
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(msg.Data)
 	if err != nil {
-		err = errs.ErrInvalidProtocol(op)
-		log.Error(errMsg, logger.Err(err))
-		streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, err.Error())
+		errM := errs.ErrInvalidProtocol(op)
+		log.Error(errM.Error(), logger.Err(err))
+		streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errM.Error())
 		if merr != nil {
 			log.Error("failed to build stream error message")
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		return err
+		// return err
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
 		log.Error(err.Error(), logger.Attr("userID", regMsg.ID))
@@ -97,11 +97,11 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		return errs.NewAppError(op, err)
+		// return errs.NewAppError(op, err)
 	}
 	log.Info("user is registered", logger.Attr("userID", regMsg.ID))
 	if err := ss.writeMsg(stream, []byte("success"), addr); err != nil {
-		return errs.NewAppError(op, err)
+		// return errs.NewAppError(op, err)
 	}
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, regMsg.ID); err != nil {
