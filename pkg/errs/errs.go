@@ -13,6 +13,7 @@ var (
 	ErrRequestTimeoutBase   = errors.New("request timeout")
 	ErrWrongMessageTypeBase = errors.New("wrong message type")
 	ErrInvalidProtocolBase  = errors.New("invalid protocol")
+	ErrValidationBase       = errors.New("valdiation error")
 )
 
 type AppError struct {
@@ -57,4 +58,8 @@ func ErrWrongMessageType(op string) AppError {
 
 func ErrInvalidProtocol(op string) AppError {
 	return AppError{Op: op, Err: ErrInvalidProtocolBase}
+}
+
+func ErrValidation(op string) AppError {
+	return AppError{Op: op, Err: ErrValidationBase}
 }

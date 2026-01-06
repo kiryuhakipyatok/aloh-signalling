@@ -40,6 +40,12 @@ func InvalidDataErrorMessage(mid string, errMsg string) ([]byte, error) {
 	return marshalError(op, em)
 }
 
+func ValidationErrorMessage(mid string, errMsg string) ([]byte, error) {
+	op := "protocols.ValidationErrorMessage"
+	em := NewErrorMessage(mid, errMsg, int8(quic.ProtocolViolation))
+	return marshalError(op, em)
+}
+
 func marshalError(op string, em ErrorMessage) ([]byte, error) {
 	streamErrMsg, err := json.Marshal(em)
 	if err != nil {

@@ -3,42 +3,50 @@ package protocols
 import (
 	"encoding/json"
 	"test/pkg/errs"
+
+	"test/pkg/validator"
 )
 
 type Message struct {
-	Id   string          `json:"id"`
-	Type uint8           `json:"type"`
-	Data json.RawMessage `json:"data"`
+	Id   string          `json:"id" validate:"required,min=1"`
+	Type uint8           `json:"type" validate:"required"`
+	Data json.RawMessage `json:"data" validate:"required,min=1"`
 }
 
 type RegisterConnectMessage struct {
-	ID string `json:"id"`
+	ID string `json:"id" validate:"required,min=1"`
 }
 
 type SendPayloadMessage struct {
-	RecevierIDs []string        `json:"ids"`
-	Payload     json.RawMessage `json:"payload"`
+	RecevierIDs []string        `json:"ids" validate:"required,min=1"`
+	Payload     json.RawMessage `json:"payload" validate:"required,min=1"`
 }
 
 type ReplyMessage struct {
-	Sender  string          `json:"id"`
-	Payload json.RawMessage `json:"payload"`
+	Sender  string          `json:"id" validate:"required,min=1"`
+	Payload json.RawMessage `json:"payload" validate:"required,min=1"`
 }
 
-func ToRegisterConnectMessage(data json.RawMessage) (*RegisterConnectMessage, error) {
+func ToRegisterConnectMessage(v *validator.Validator, data json.RawMessage) (*RegisterConnectMessage, error) {
 	op := "protocols.ToRegisterConnectMessage"
 	regMsg := &RegisterConnectMessage{}
 	if err := json.Unmarshal(data, regMsg); err != nil {
 		return nil, errs.ErrInvalidProtocol(op)
 	}
+	if err := v.Validate.Struct(regMsg); err != nil {
+		return nil, errs.ErrValidation(op)
+	}
 	return regMsg, nil
 }
 
-func ToSendPayloadMessage(data json.RawMessage) (*SendPayloadMessage, error) {
+func ToSendPayloadMessage(v *validator.Validator, data json.RawMessage) (*SendPayloadMessage, error) {
 	op := "protocols.ToSendPayloadMessage"
 	connectMsg := &SendPayloadMessage{}
 	if err := json.Unmarshal(data, connectMsg); err != nil {
 		return nil, errs.ErrInvalidProtocol(op)
+	}
+	if err := v.Validate.Struct(connectMsg); err != nil {
+		return nil, errs.ErrValidation(op)
 	}
 	return connectMsg, nil
 }

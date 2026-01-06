@@ -81,6 +81,7 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 	go func() {
 		wg.Wait()
 	}()
+
 	for {
 		conn, err := s.Listener.Accept(ctx)
 		if err != nil {

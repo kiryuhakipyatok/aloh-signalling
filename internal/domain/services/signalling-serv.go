@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"test/internal/domain/repository"
 	"test/internal/protocols"
 	"test/pkg/errs"
 	"test/pkg/logger"
+	"test/pkg/validator"
 
 	"github.com/quic-go/quic-go"
 )
@@ -22,12 +22,14 @@ type SignallingService interface {
 type signalService struct {
 	ConnectionRepo repository.ConnectionsRepo
 	Logger         *logger.Logger
+	Validator      *validator.Validator
 }
 
-func NewSignallingService(cr repository.ConnectionsRepo, l *logger.Logger) SignallingService {
+func NewSignallingService(cr repository.ConnectionsRepo, v *validator.Validator, l *logger.Logger) SignallingService {
 	return &signalService{
 		ConnectionRepo: cr,
 		Logger:         l,
+		Validator:      v,
 	}
 }
 
@@ -36,6 +38,12 @@ const (
 	sendType
 	disconnType
 )
+
+func (ss *signalService) validate(s any) {
+	if err := ss.Validator.Validate.Struct(s); err != nil {
+
+	}
+}
 
 func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) error {
 	op := "signalService.ServeConnection"
@@ -59,48 +67,56 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	if err := decoder.Decode(&msg); err != nil {
 		errMsg = "invalid protocol"
 		log.Error(errMsg, logger.Err(err))
-		streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errMsg)
+		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errMsg)
 		if merr != nil {
 			log.Error("failed to build stream error message")
 
 		}
-		ss.writeMsg(stream, streamErr, addr)
+		ss.writeMsg(stream, dataErr, addr)
 		return errs.ErrDecodeMsg(op)
 	}
-	fmt.Println(msg.Id)
-	fmt.Println(msg.Type)
-	fmt.Println(msg.Data)
+	if err := ss.Validator.Validate.Struct(msg); err != nil {
+		errMsg := "validation error"
+		valErr, merr := protocols.ValidationErrorMessage(msg.Id, errMsg)
+		if merr != nil {
+			log.Error("failed to build stream error message")
+		}
+		ss.writeMsg(stream, valErr, addr)
+		log.Error(errMsg, logger.Err(err))
+		return errs.ErrValidation(op)
+	}
+
 	if msg.Type != regType {
 		err = errs.ErrWrongMessageType(op)
 		log.Error(errMsg, logger.Attr("msgType", msg.Type), logger.Err(err))
-		streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, err.Error())
+		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, err.Error())
 		if merr != nil {
 			log.Error("failed to build stream error message")
 
 		}
-		ss.writeMsg(stream, streamErr, addr)
+		ss.writeMsg(stream, dataErr, addr)
 		return err
 	}
-	regMsg, err := protocols.ToRegisterConnectMessage(msg.Data)
+	regMsg, err := protocols.ToRegisterConnectMessage(ss.Validator, msg.Data)
 	if err != nil {
 		errM := errs.ErrInvalidProtocol(op)
 		log.Error(errM.Error(), logger.Err(err))
-		streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errM.Error())
+		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errM.Error())
 		if merr != nil {
 			log.Error("failed to build stream error message")
 
 		}
-		ss.writeMsg(stream, streamErr, addr)
+		ss.writeMsg(stream, dataErr, addr)
 		return err
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
 		log.Error(err.Error(), logger.Attr("userID", regMsg.ID))
-		streamErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
+		servErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
 		if merr != nil {
 			log.Error("failed to build stream error message")
 
 		}
-		ss.writeMsg(stream, streamErr, addr)
+		ss.writeMsg(stream, servErr, addr)
 		return errs.NewAppError(op, err)
 	}
 	log.Info("user is registered", logger.Attr("userID", regMsg.ID))
@@ -110,11 +126,11 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, regMsg.ID); err != nil {
 			log.Error(err.Error(), logger.Attr("userID", regMsg.ID))
-			streamErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
+			servErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
 			if merr != nil {
 				log.Error("failed to build stream error message")
 			}
-			ss.writeMsg(stream, streamErr, addr)
+			ss.writeMsg(stream, servErr, addr)
 		}
 		log.Info("connect is deleted", logger.Attr("userID", regMsg.ID))
 	}()
@@ -159,6 +175,16 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 				}
 				return nil
 			}
+			if err := ss.Validator.Validate.Struct(msg); err != nil {
+				errMsg := "validation error"
+				valErr, merr := protocols.ValidationErrorMessage(msg.Id, errMsg)
+				if merr != nil {
+					log.Error("failed to build stream error message")
+				}
+				ss.writeMsg(stream, valErr, addr)
+				log.Error(errMsg, logger.Err(err))
+				return errs.ErrValidation(op)
+			}
 			switch msg.Type {
 			case sendType:
 				go func() {
@@ -199,7 +225,7 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, paylo
 
 	log.Info("proxing...")
 	userAddr := conn.RemoteAddr().String()
-	sendPayloadMsg, err := protocols.ToSendPayloadMessage(payloadData)
+	sendPayloadMsg, err := protocols.ToSendPayloadMessage(ss.Validator, payloadData)
 	if err != nil {
 		log.Error(err.Error(), logger.Err(err))
 		streamErr, merr := protocols.InvalidDataErrorMessage(msgId, err.Error())

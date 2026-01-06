@@ -10,6 +10,7 @@ import (
 	"test/internal/domain/services"
 	"test/internal/server"
 	"test/pkg/logger"
+	"test/pkg/validator"
 )
 
 func Run() {
@@ -17,9 +18,10 @@ func Run() {
 	cfg := config.NewConfig(path)
 	logger := logger.NewLogger(cfg.App)
 	logger.Info("app config is loaded")
+	validator := validator.NewValidator()
 	connRepo := repository.NewConnectionsRepo()
 	logger.Info("repos are created")
-	signallingSerivice := services.NewSignallingService(connRepo, logger)
+	signallingSerivice := services.NewSignallingService(connRepo, validator, logger)
 	logger.Info("services are created")
 	serv := server.NewServer(cfg.Server, logger)
 	logger.Info("server is started")
