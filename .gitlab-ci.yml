@@ -3,13 +3,6 @@ stages:
   - test
   - deploy
 
-# before_script:
-#   - |
-#     cat > .env << EOF
-#     CONFIG_PATH=$CONFIG_PATH
-#     SERVER_PORT=$SERVER_PORT
-#     EOF
-
 build-job:
   stage: build
   script:

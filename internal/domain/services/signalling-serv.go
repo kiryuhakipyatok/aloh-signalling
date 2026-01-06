@@ -77,16 +77,17 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	if err := ss.Validator.Validate.Struct(msg); err != nil {
 		errMsg := "validation error"
+		log.Error(errMsg, logger.Err(err))
 		valErr, merr := protocols.ValidationErrorMessage(msg.Id, errMsg)
 		if merr != nil {
 			log.Error("failed to build stream error message")
 		}
 		ss.writeMsg(stream, valErr, addr)
-		log.Error(errMsg, logger.Err(err))
+
 		return errs.ErrValidation(op)
 	}
 
-	if msg.Type != regType {
+	if *msg.Type != regType {
 		err = errs.ErrWrongMessageType(op)
 		log.Error(errMsg, logger.Attr("msgType", msg.Type), logger.Err(err))
 		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, err.Error())
@@ -185,7 +186,7 @@ func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder,
 				log.Error(errMsg, logger.Err(err))
 				return errs.ErrValidation(op)
 			}
-			switch msg.Type {
+			switch *msg.Type {
 			case sendType:
 				go func() {
 					if err := ss.proxing(ctx, stream, msg.Data, conn, userId, msg.Id); err != nil {

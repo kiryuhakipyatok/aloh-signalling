@@ -9,7 +9,7 @@ import (
 
 type Message struct {
 	Id   string          `json:"id" validate:"required,min=1"`
-	Type uint8           `json:"type" validate:"required"`
+	Type *uint8          `json:"type" validate:"required"`
 	Data json.RawMessage `json:"data" validate:"required,min=1"`
 }
 

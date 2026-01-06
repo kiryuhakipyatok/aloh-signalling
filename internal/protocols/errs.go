@@ -2,7 +2,6 @@ package protocols
 
 import (
 	"encoding/json"
-	"fmt"
 	"test/pkg/errs"
 
 	"github.com/quic-go/quic-go"
@@ -51,6 +50,5 @@ func marshalError(op string, em ErrorMessage) ([]byte, error) {
 	if err != nil {
 		return nil, errs.ErrInvalidProtocol(op)
 	}
-	fmt.Println(string(streamErrMsg))
 	return streamErrMsg, nil
 }
