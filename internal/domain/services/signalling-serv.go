@@ -10,7 +10,6 @@ import (
 	"test/internal/protocols"
 	"test/pkg/errs"
 	"test/pkg/logger"
-	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -65,7 +64,6 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		time.Sleep(time.Second * 10)
 		return errs.ErrDecodeMsg(op)
 	}
 	if msg.Type != regType {
@@ -77,7 +75,6 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		time.Sleep(time.Second * 10)
 		return err
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(msg.Data)
@@ -90,7 +87,6 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		time.Sleep(time.Second * 10)
 		return err
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
@@ -101,7 +97,6 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 		}
 		ss.writeMsg(stream, streamErr, addr)
-		time.Sleep(time.Second * 10)
 		return errs.NewAppError(op, err)
 	}
 	log.Info("user is registered", logger.Attr("userID", regMsg.ID))

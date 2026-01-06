@@ -9,6 +9,7 @@ import (
 	"sync"
 	"test/internal/config"
 	"test/pkg/logger"
+	"time"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
@@ -95,10 +96,12 @@ func (s *Server) AcceptConnections(ctx context.Context, handler func(ctx context
 		wg.Go(func() {
 			if err := handler(ctx, conn); err != nil {
 				log.Error("failed to serve connection", logger.Attr("address", addr), logger.Err(err))
+				time.Sleep(time.Second * 3)
 				conn.CloseWithError(1, err.Error())
 				log.Info("connection closed with error", logger.Err(err))
 				return
 			} else {
+				time.Sleep(time.Second * 3)
 				conn.CloseWithError(0, "connection closed without error")
 				log.Info("connection closed without error", logger.Attr("address", addr))
 				return
