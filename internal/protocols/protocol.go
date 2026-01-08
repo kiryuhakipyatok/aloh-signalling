@@ -31,10 +31,10 @@ func ToRegisterConnectMessage(v *validator.Validator, data json.RawMessage) (*Re
 	op := "protocols.ToRegisterConnectMessage"
 	regMsg := &RegisterConnectMessage{}
 	if err := json.Unmarshal(data, regMsg); err != nil {
-		return nil, errs.ErrInvalidProtocol(op)
+		return nil, errs.ErrInvalidJson(op, err)
 	}
 	if err := v.Validate.Struct(regMsg); err != nil {
-		return nil, errs.ErrValidation(op)
+		return nil, errs.ErrValidation(op, err)
 	}
 	return regMsg, nil
 }
@@ -43,10 +43,10 @@ func ToSendPayloadMessage(v *validator.Validator, data json.RawMessage) (*SendPa
 	op := "protocols.ToSendPayloadMessage"
 	connectMsg := &SendPayloadMessage{}
 	if err := json.Unmarshal(data, connectMsg); err != nil {
-		return nil, errs.ErrInvalidProtocol(op)
+		return nil, errs.ErrInvalidJson(op, err)
 	}
 	if err := v.Validate.Struct(connectMsg); err != nil {
-		return nil, errs.ErrValidation(op)
+		return nil, errs.ErrValidation(op, err)
 	}
 	return connectMsg, nil
 }
@@ -59,7 +59,7 @@ func NewReplyMessage(senderId string, pyaload json.RawMessage) ([]byte, error) {
 	}
 	replyMsg, err := json.Marshal(rm)
 	if err != nil {
-		return nil, errs.ErrInvalidProtocol(op)
+		return nil, errs.ErrInvalidJson(op, err)
 	}
 	return replyMsg, nil
 }

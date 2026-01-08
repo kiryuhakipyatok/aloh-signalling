@@ -12,7 +12,7 @@ var (
 	ErrAlreadyExistsBase    = errors.New("already exists")
 	ErrRequestTimeoutBase   = errors.New("request timeout")
 	ErrWrongMessageTypeBase = errors.New("wrong message type")
-	ErrInvalidProtocolBase  = errors.New("invalid protocol")
+	ErrInvalidJsonBase      = errors.New("invalid json")
 	ErrValidationBase       = errors.New("valdiation error")
 )
 
@@ -25,6 +25,10 @@ func (ae AppError) Error() string {
 	return fmt.Sprintf("%v", ae.Err.Error())
 }
 
+func (ae AppError) Unwrap() error {
+	return ae.Err
+}
+
 func NewAppError(op string, err error) AppError {
 	return AppError{
 		Op:  op,
@@ -32,34 +36,34 @@ func NewAppError(op string, err error) AppError {
 	}
 }
 
-func ErrWriteMsg(op string) AppError {
-	return AppError{Op: op, Err: ErrWriteMsgBase}
+func ErrWriteMsg(op string, err error) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrWriteMsgBase, err)}
 }
 
-func ErrDecodeMsg(op string) AppError {
-	return AppError{Op: op, Err: ErrDecodeMsgBase}
+func ErrDecodeMsg(op string, err error) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrDecodeMsgBase, err)}
 }
 
 func ErrNotFound(op string) AppError {
-	return AppError{Op: op, Err: ErrNotFoundBase}
+	return AppError{Op: op, Err: fmt.Errorf("%w", ErrNotFoundBase)}
 }
 
 func ErrAlreadyExists(op string) AppError {
-	return AppError{Op: op, Err: ErrAlreadyExistsBase}
+	return AppError{Op: op, Err: fmt.Errorf("%w", ErrAlreadyExistsBase)}
 }
 
 func ErrRequestTimeout(op string) AppError {
-	return AppError{Op: op, Err: ErrRequestTimeoutBase}
+	return AppError{Op: op, Err: fmt.Errorf("%w", ErrRequestTimeoutBase)}
 }
 
-func ErrWrongMessageType(op string) AppError {
-	return AppError{Op: op, Err: ErrWrongMessageTypeBase}
+func ErrWrongMessageType(op string, err error) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrWrongMessageTypeBase, err)}
 }
 
-func ErrInvalidProtocol(op string) AppError {
-	return AppError{Op: op, Err: ErrInvalidProtocolBase}
+func ErrInvalidJson(op string, err error) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrInvalidJsonBase, err)}
 }
 
-func ErrValidation(op string) AppError {
-	return AppError{Op: op, Err: ErrValidationBase}
+func ErrValidation(op string, err error) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrValidationBase, err)}
 }

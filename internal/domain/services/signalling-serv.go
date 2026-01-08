@@ -39,16 +39,17 @@ const (
 	disconnType
 )
 
-func (ss *signalService) validate(s any) {
-	if err := ss.Validator.Validate.Struct(s); err != nil {
-
-	}
+type userConnection struct {
+	userId     string
+	quicConn   *quic.Conn
+	ctrlStream *quic.Stream
+	decoder    *json.Decoder
 }
 
 func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) error {
 	op := "signalService.ServeConnection"
 	log := ss.Logger.AddOp(op)
-	log.Info("connection serving...", logger.Attr("address", conn.RemoteAddr()))
+	log.Info("connection serving...", logger.Attr("address", conn.RemoteAddr().String()))
 	stream, err := conn.AcceptStream(ctx)
 	if err != nil {
 		if cErr := ss.checkErr(ctx, err); cErr != nil {
@@ -60,65 +61,36 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	log.Info("new stream", logger.Attr("id", stream.StreamID()))
 	decoder := json.NewDecoder(stream)
 	var (
-		msg    protocols.Message
-		errMsg string
+		msg protocols.Message
 	)
 	addr := conn.RemoteAddr().String()
-	if err := decoder.Decode(&msg); err != nil {
-		errMsg = "invalid protocol"
-		log.Error(errMsg, logger.Err(err))
-		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errMsg)
-		if merr != nil {
-			log.Error("failed to build stream error message")
-
-		}
-		ss.writeMsg(stream, dataErr, addr)
-		return errs.ErrDecodeMsg(op)
+	userConnection := &userConnection{
+		quicConn:   conn,
+		ctrlStream: stream,
+		decoder:    decoder,
 	}
-	if err := ss.Validator.Validate.Struct(msg); err != nil {
-		errMsg := "validation error"
-		log.Error(errMsg, logger.Err(err))
-		valErr, merr := protocols.ValidationErrorMessage(msg.Id, errMsg)
-		if merr != nil {
-			log.Error("failed to build stream error message")
-		}
-		ss.writeMsg(stream, valErr, addr)
 
-		return errs.ErrValidation(op)
+	if err := ss.processMsg(userConnection, &msg, addr); err != nil {
+		log.Error("failed to produce message", logger.Err(err))
 	}
 
 	if *msg.Type != regType {
-		err = errs.ErrWrongMessageType(op)
-		log.Error(errMsg, logger.Attr("msgType", msg.Type), logger.Err(err))
-		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, err.Error())
-		if merr != nil {
-			log.Error("failed to build stream error message")
 
+		log.Error("invalid message type", logger.Attr("msgType", msg.Type))
+		typeErr, merr := protocols.InvalidTypeErrorMessage(msg.Id)
+		if merr != nil {
+			log.Error("failed to build stream error message", logger.Err(merr))
 		}
-		ss.writeMsg(stream, dataErr, addr)
+		ss.writeMsg(stream, typeErr, addr)
 		return err
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(ss.Validator, msg.Data)
 	if err != nil {
-		errM := errs.ErrInvalidProtocol(op)
-		log.Error(errM.Error(), logger.Err(err))
-		dataErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errM.Error())
-		if merr != nil {
-			log.Error("failed to build stream error message")
-
-		}
-		ss.writeMsg(stream, dataErr, addr)
-		return err
+		return ss.processError(userConnection, err, msg.Id)
 	}
 	if err := ss.ConnectionRepo.AddConnect(ctx, regMsg.ID, conn); err != nil {
-		log.Error(err.Error(), logger.Attr("userID", regMsg.ID))
-		servErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
-		if merr != nil {
-			log.Error("failed to build stream error message")
-
-		}
-		ss.writeMsg(stream, servErr, addr)
-		return errs.NewAppError(op, err)
+		log.Error("faield to add connect", logger.Attr("userID", regMsg.ID), logger.Err(err))
+		return ss.processError(userConnection, err, regMsg.ID)
 	}
 	log.Info("user is registered", logger.Attr("userID", regMsg.ID))
 	if err := ss.writeMsg(stream, []byte("success"), addr); err != nil {
@@ -126,143 +98,102 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, regMsg.ID); err != nil {
-			log.Error(err.Error(), logger.Attr("userID", regMsg.ID))
-			servErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
-			if merr != nil {
-				log.Error("failed to build stream error message")
-			}
-			ss.writeMsg(stream, servErr, addr)
+			log.Error("faield to delete connect", logger.Attr("userID", regMsg.ID), logger.Err(err))
+			ss.processError(userConnection, err, regMsg.ID)
 		}
 		log.Info("connect is deleted", logger.Attr("userID", regMsg.ID))
 	}()
-	return ss.commandLoop(ctx, decoder, stream, conn, regMsg.ID, msg.Id)
+	userConnection.userId = regMsg.ID
+	return ss.commandLoop(ctx, userConnection)
 }
 
-func (ss *signalService) commandLoop(ctx context.Context, decoder *json.Decoder, stream *quic.Stream, conn *quic.Conn, userId, msgId string) error {
+func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) error {
 	op := "signalService.commandLoop"
 	log := ss.Logger.AddOp(op)
 	log.Info("serving connection in command loop...")
-	addr := conn.RemoteAddr().String()
+	addr := uc.quicConn.RemoteAddr().String()
 	defer func() {
-		if err := stream.Close(); err != nil {
-			log.Error("failed to close command stream", logger.Attr("address", addr), logger.Err(err))
-			streamErr, merr := protocols.StreamErrorMessage(msgId, err.Error())
+		if err := uc.ctrlStream.Close(); err != nil {
+			log.Error("failed to close command stream", logger.Attr("userId", uc.userId), logger.Err(err))
+			streamErr, merr := protocols.StreamErrorMessage("")
 			if merr != nil {
-				log.Error("failed to build stream error message")
+				log.Error("failed to build stream error message", logger.Err(merr))
 			}
-			ss.writeMsg(stream, streamErr, addr)
+			ss.writeMsg(uc.ctrlStream, streamErr, addr)
 		} else {
 			log.Info("command stream is closed", logger.Attr("address", addr))
 		}
 	}()
-	select {
-	case <-stream.Context().Done():
-		log.Info("command stream is done", logger.Attr("address", addr))
-		return nil
-	default:
-		for {
-			var msg protocols.Message
-			err := decoder.Decode(&msg)
-			if err != nil {
-				if cErr := ss.checkErr(ctx, err); cErr != nil {
-					log.Error("failed to decode msg", logger.Err(err))
-					streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, err.Error())
-					if merr != nil {
-						log.Error("failed to build stream error message")
 
-					}
-					ss.writeMsg(stream, streamErr, addr)
-					return errs.NewAppError(op, cErr)
-				}
+	for {
+		select {
+		case <-uc.ctrlStream.Context().Done():
+			log.Info("command stream is done", logger.Attr("address", addr))
+			return nil
+		case <-ctx.Done():
+			log.Info("server context is done", logger.Attr("address", addr))
+			return ctx.Err()
+		default:
+		}
+		var msg protocols.Message
+		if err := ss.processMsg(uc, &msg, addr); err != nil {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
-			if err := ss.Validator.Validate.Struct(msg); err != nil {
-				errMsg := "validation error"
-				valErr, merr := protocols.ValidationErrorMessage(msg.Id, errMsg)
-				if merr != nil {
-					log.Error("failed to build stream error message")
+			log.Error("failed to process message", logger.Err(err))
+			return errs.NewAppError(op, err)
+		}
+		switch *msg.Type {
+		case sendType:
+			go func() {
+				if err := ss.sendMsg(ctx, uc, msg.Data, msg.Id); err != nil {
+					log.Error("message sending is failed", logger.Err(err), logger.Attr("address", addr))
+					return
 				}
-				ss.writeMsg(stream, valErr, addr)
-				log.Error(errMsg, logger.Err(err))
-				return errs.ErrValidation(op)
+			}()
+		case disconnType:
+			log.Info("user disconnecting...", logger.Attr("address", addr))
+			if err := uc.quicConn.CloseWithError(0, "user disconnected"); err != nil {
+				log.Error("faield to disconnect user", logger.Err(err))
+				return err
 			}
-			switch *msg.Type {
-			case sendType:
-				go func() {
-					if err := ss.proxing(ctx, stream, msg.Data, conn, userId, msg.Id); err != nil {
-						log.Error("proxing failed", logger.Err(err), logger.Attr("address", addr))
-						// streamErr, merr := protocols.InternalServerErrorMessage(msg.Id, err.Error())
-						// if merr != nil {
-						// 	log.Error("failed to build stream error message")
-						// }
-						// ss.writeMsg(stream, streamErr, addr)
-						return
-					}
-				}()
-			case disconnType:
-				if err := conn.CloseWithError(0, "user disconnected"); err != nil {
-					log.Error("faield to disconnect user", logger.Err(err))
-					return err
-				}
-				log.Info("user disconnected successfully", logger.Attr("address", addr))
-				return nil
-			default:
-				errMsg := "unknown command"
-				log.Error(errMsg, logger.Attr("msgType", msg.Type))
-				streamErr, merr := protocols.InvalidDataErrorMessage(msg.Id, errMsg)
-				if merr != nil {
-					log.Error("failed to build stream error message")
-
-				}
-				ss.writeMsg(stream, streamErr, addr)
+			log.Info("user disconnected successfully", logger.Attr("address", addr))
+			return nil
+		default:
+			log.Error("invalid message type", logger.Attr("msgType", msg.Type))
+			typeErr, merr := protocols.InvalidTypeErrorMessage(msg.Id)
+			if merr != nil {
+				log.Error("failed to build stream error message", logger.Err(merr))
 			}
+			ss.writeMsg(uc.ctrlStream, typeErr, addr)
 		}
 	}
+
 }
 
-func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, payloadData []byte, conn *quic.Conn, userId, msgId string) error {
-	op := "signalService.proxing"
+func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloadData []byte, msgId string) error {
+	op := "signalService.sendMsg"
 	log := ss.Logger.AddOp(op)
 
-	log.Info("proxing...")
-	userAddr := conn.RemoteAddr().String()
+	log.Info("message sending...")
+	userAddr := uc.quicConn.RemoteAddr().String()
 	sendPayloadMsg, err := protocols.ToSendPayloadMessage(ss.Validator, payloadData)
 	if err != nil {
-		log.Error(err.Error(), logger.Err(err))
-		streamErr, merr := protocols.InvalidDataErrorMessage(msgId, err.Error())
-		if merr != nil {
-			log.Error("failed to build stream error message")
-
-		}
-		ss.writeMsg(stream, streamErr, userAddr)
-		return errs.NewAppError(op, err)
+		log.Error("failed to cast send message", logger.Err(err))
+		return ss.processError(uc, err, msgId)
 	}
-	replyMsg, err := protocols.NewReplyMessage(userId, sendPayloadMsg.Payload)
+	replyMsg, err := protocols.NewReplyMessage(uc.userId, sendPayloadMsg.Payload)
 	if err != nil {
-		log.Error(err.Error(), logger.Err(err))
-		streamErr, merr := protocols.InvalidDataErrorMessage(msgId, err.Error())
-		if merr != nil {
-			log.Error("failed to build stream error message")
-
-		}
-		ss.writeMsg(stream, streamErr, userAddr)
-		return errs.NewAppError(op, err)
+		log.Error("failed to send cast reply message", logger.Err(err))
+		return ss.processError(uc, err, msgId)
 	}
 	log.Info("getting receivers connections")
-	var errMsg string
 	receiverConns, err := ss.ConnectionRepo.GetConnects(ctx, sendPayloadMsg.RecevierIDs)
 	if err != nil {
-		log.Error(err.Error(), logger.Err(err))
-		streamErr, merr := protocols.InternalServerErrorMessage(msgId, err.Error())
-		if merr != nil {
-			log.Error("failed to build stream error message")
-
-		}
-		ss.writeMsg(stream, streamErr, userAddr)
-		return errs.NewAppError(op, err)
+		log.Error("failed to get contacts", logger.Err(err))
+		return ss.processError(uc, err, msgId)
 	}
 
-	// gErrChan := make(chan error, 1)
 	var wg sync.WaitGroup
 	log.Info("opening receivers streams")
 	for _, rConn := range receiverConns {
@@ -272,29 +203,14 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, paylo
 			logReceiverAddr := logger.Attr("receiverAddress", receiverAddr)
 			receiverStream, err := rConn.OpenUniStreamSync(ctx)
 			if err != nil {
-				errMsg = "failed to open receiver's stream"
-				log.Error(errMsg, logger.Err(err), logReceiverAddr)
-				streamErr, merr := protocols.StreamErrorMessage(msgId, errMsg)
-				if merr != nil {
-					log.Error("failed to build stream error message")
-					// gErrChan <- errs.NewAppError(op, merr)
-				}
-				ss.writeMsg(stream, streamErr, receiverAddr)
-				// gErrChan <- errs.NewAppError(op, err)
-
+				log.Error("failed to open receiver's stream", logger.Err(err), logReceiverAddr)
+				ss.processError(uc, err, msgId)
 			}
 			defer func() {
 				log.Info("closing receiver's stream", logReceiverAddr)
 				if err := receiverStream.Close(); err != nil {
-					errMsg := "failed to close receiver's stream"
-					log.Error(errMsg, logReceiverAddr)
-					streamErr, merr := protocols.StreamErrorMessage(msgId, errMsg)
-					if merr != nil {
-						log.Error("failed to build stream error message")
-						// gErrChan <- errs.NewAppError(op, merr)
-					}
-					ss.writeMsg(stream, streamErr, receiverAddr)
-					// gErrChan <- errs.NewAppError(op, err)
+					log.Error("failed to close receiver's stream", logReceiverAddr)
+					ss.processError(uc, err, msgId)
 				} else {
 					log.Info("receiver's stream is closed successfully", logReceiverAddr)
 				}
@@ -302,60 +218,15 @@ func (ss *signalService) proxing(ctx context.Context, stream *quic.Stream, paylo
 			log.Info("receiver's stream is opened")
 			if _, err := receiverStream.Write(replyMsg); err != nil {
 				log.Error("failed to write message to receiver", logger.Err(err))
-				streamErr, merr := protocols.StreamErrorMessage(msgId, errMsg)
-				if merr != nil {
-					log.Error("failed to build stream error message")
-					// gErrChan <- errs.NewAppError(op, merr)
-				}
-				ss.writeMsg(stream, streamErr, receiverAddr)
+				ss.processError(uc, err, msgId)
 			}
 
 			log.Info("message sended successfully", logUserAddr, logReceiverAddr)
-			ss.writeMsg(stream, []byte("message sended successfully"), msgId)
-
+			ss.writeMsg(uc.ctrlStream, []byte("message sended successfully"), msgId)
 		})
 	}
-	// go func() {
+
 	wg.Wait()
-	// close(gErrChan)
-	// }()
-	// if err = <-gErrChan; err != nil {
-	// 	return err
-	// }
-	return nil
-}
 
-func (ss *signalService) checkErr(ctx context.Context, err error) error {
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
-		return nil
-	}
-	op := "signalService.checkErr"
-	log := ss.Logger.AddOp(op)
-	log.Info("error checking...")
-	if errors.Is(err, io.EOF) {
-		log.Info("connection closed (EOF)")
-		return nil
-	}
-	var appErr *quic.ApplicationError
-	if errors.As(err, &appErr) {
-		if appErr.ErrorCode == 0 {
-			log.Info("client is done")
-			return nil
-		}
-	}
-	log.Info("error checked")
-	return errs.NewAppError(op, err)
-
-}
-
-func (ss *signalService) writeMsg(stream *quic.Stream, msg []byte, addr string) error {
-	op := "signalService.writeMsg"
-	log := ss.Logger.AddOp(op)
-	log.Info("writting message...")
-	if _, err := stream.Write(msg); err != nil {
-		log.Error("failed to write message", logger.Err(err))
-		return errs.NewAppError(op, err)
-	}
-	log.Info("message written", logger.Attr("streamId", stream.StreamID()), logger.Attr("address", addr))
 	return nil
 }
