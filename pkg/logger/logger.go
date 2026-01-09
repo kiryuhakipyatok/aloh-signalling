@@ -62,3 +62,9 @@ func Err(err error) slog.Attr {
 func Attr(key string, val any) slog.Attr {
 	return slog.Any(key, val)
 }
+
+func NewLogData(attrs ...any) []any {
+	ld := make([]any, 0, len(attrs))
+	ld = append(ld, attrs...)
+	return ld
+}

@@ -17,68 +17,74 @@ var (
 	requestTimeout       = "request timeout"
 )
 
-type ErrorMessage struct {
+type ResponseMessage struct {
 	Code      int8   `json:"code"`
 	MessageId string `json:"msgId"`
-	Err       string `json:"error"`
+	Msg       string `json:"msg"`
 }
 
-func (em ErrorMessage) Error() string {
-	return fmt.Sprintf("msgId: %s, code: %d, error: %v", em.MessageId, em.Code, em.Err)
+func (rm ResponseMessage) Error() string {
+	return fmt.Sprintf("msgId: %s, code: %d, error: %v", rm.MessageId, rm.Code, rm.Msg)
 }
 
-func NewErrorMessage(mid string, errMsg string, code int8) ErrorMessage {
-	return ErrorMessage{
+func NewResponseMessage(mid string, msg string, code int8) ResponseMessage {
+	return ResponseMessage{
 		MessageId: mid,
 		Code:      code,
-		Err:       errMsg,
+		Msg:       msg,
 	}
 }
 
 func StreamErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.StreamErrorMessage"
-	em := NewErrorMessage(mid, streamError, int8(quic.StreamStateError))
+	em := NewResponseMessage(mid, streamError, int8(quic.StreamStateError))
 	return marshalError(op, em)
 }
 
 func InternalServerErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InternalServerErrorMessage"
-	em := NewErrorMessage(mid, internalError, int8(quic.InternalError))
+	em := NewResponseMessage(mid, internalError, int8(quic.InternalError))
 	return marshalError(op, em)
 }
 
 func InvalidProtocolErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InvalidProtocolErrorMessage"
-	em := NewErrorMessage(mid, invalidProtocolError, int8(quic.ProtocolViolation))
+	em := NewResponseMessage(mid, invalidProtocolError, int8(quic.ProtocolViolation))
 	return marshalError(op, em)
 }
 
 func InvalidTypeErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InvalidTypeErrorMessage"
-	em := NewErrorMessage(mid, invalidProtocolError, int8(quic.ProtocolViolation))
+	em := NewResponseMessage(mid, invalidProtocolError, int8(quic.ProtocolViolation))
 	return marshalError(op, em)
 }
 
-func ErrorNotFound(mid string) ([]byte, error) {
-	op := "protocols.ErrorNotFound"
-	em := NewErrorMessage(mid, notFound, int8(quic.ProtocolViolation))
+func ErrorNotFoundMessage(mid string) ([]byte, error) {
+	op := "protocols.ErrorNotFoundMessage"
+	em := NewResponseMessage(mid, notFound, int8(quic.ProtocolViolation))
 	return marshalError(op, em)
 }
 
-func ErrorAlreadyExists(mid string) ([]byte, error) {
-	op := "protocols.ErrorAlreadyExists"
-	em := NewErrorMessage(mid, alreadyExists, int8(quic.ProtocolViolation))
+func ErrorAlreadyExistsMessage(mid string) ([]byte, error) {
+	op := "protocols.ErrorAlreadyExistsMessage"
+	em := NewResponseMessage(mid, alreadyExists, int8(quic.ProtocolViolation))
 	return marshalError(op, em)
 }
 
-func ErrorRequestTimeout(mid string) ([]byte, error) {
-	op := "protocols.ErrorRequestTimeout"
-	em := NewErrorMessage(mid, requestTimeout, int8(quic.InternalError))
+func ErrorRequestTimeoutMessage(mid string) ([]byte, error) {
+	op := "protocols.ErrorRequestTimeoutMessage"
+	em := NewResponseMessage(mid, requestTimeout, int8(quic.InternalError))
 	return marshalError(op, em)
 }
 
-func marshalError(op string, em ErrorMessage) ([]byte, error) {
-	errMsg, err := json.Marshal(em)
+func SuccessMessage(mid string) ([]byte, error) {
+	op := "protocols.SuccessMessage"
+	sm := NewResponseMessage(mid, "success", int8(quic.NoError))
+	return marshalError(op, sm)
+}
+
+func marshalError(op string, rm ResponseMessage) ([]byte, error) {
+	errMsg, err := json.Marshal(rm)
 	if err != nil {
 		return nil, errs.ErrInvalidJson(op, err)
 	}

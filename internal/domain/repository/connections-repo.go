@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"test/internal/domain/models"
 	"test/pkg/errs"
-
-	"github.com/quic-go/quic-go"
 )
 
 type ConnectionsRepo interface {
-	AddConnect(ctx context.Context, id string, conn *quic.Conn) error
+	AddConnect(ctx context.Context, user *models.User) error
 	DeleteConnect(ctx context.Context, id string) error
-	GetConnects(ctx context.Context, ids []string) ([]*quic.Conn, error)
+	GetConnects(ctx context.Context, ids []string) ([]models.User, error)
 }
 
 type connectionsRepo struct {
@@ -23,13 +22,13 @@ func NewConnectionsRepo() ConnectionsRepo {
 	return &connectionsRepo{}
 }
 
-func (cr *connectionsRepo) AddConnect(ctx context.Context, id string, conn *quic.Conn) error {
+func (cr *connectionsRepo) AddConnect(ctx context.Context, user *models.User) error {
 	op := "connectionsRepo.AddConnect"
 	select {
 	case <-ctx.Done():
 		return errs.ErrRequestTimeout(op)
 	default:
-		if _, ok := cr.LoadOrStore(id, conn); ok {
+		if _, ok := cr.LoadOrStore(user.ID, *user); ok {
 			return errs.ErrAlreadyExists(op)
 		}
 		return nil
@@ -49,9 +48,9 @@ func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id string) error {
 	}
 }
 
-func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]*quic.Conn, error) {
-	op := "connectionsRepo.GetConnect"
-	connects := []*quic.Conn{}
+func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]models.User, error) {
+	op := "connectionsRepo.GetConnects"
+	users := []models.User{}
 	select {
 	case <-ctx.Done():
 		return nil, errs.ErrRequestTimeout(op)
@@ -61,12 +60,12 @@ func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]*qu
 			if !ok {
 				return nil, errs.ErrNotFound(op)
 			}
-			conn, ok := val.(*quic.Conn)
+			user, ok := val.(models.User)
 			if !ok {
 				return nil, errors.New("invalid value type")
 			}
-			connects = append(connects, conn)
+			users = append(users, user)
 		}
-		return connects, nil
+		return users, nil
 	}
 }
