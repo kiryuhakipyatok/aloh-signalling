@@ -11,10 +11,10 @@ import (
 )
 
 func checkErr(ctx context.Context, err error) error {
+
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
 		return nil
 	}
-	op := "utils.checkErr"
 
 	if errors.Is(err, io.EOF) {
 		return nil
@@ -26,7 +26,7 @@ func checkErr(ctx context.Context, err error) error {
 		}
 	}
 
-	return errs.NewAppError(op, err)
+	return err
 
 }
 

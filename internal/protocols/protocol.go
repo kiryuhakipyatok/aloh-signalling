@@ -23,7 +23,7 @@ type SendPayloadMessage struct {
 }
 
 type ReplyMessage struct {
-	Sender  string          `json:"id" validate:"required,min=1"`
+	Sender  string          `json:"sender-id" validate:"required,min=1"`
 	Payload json.RawMessage `json:"payload" validate:"required,min=1"`
 }
 

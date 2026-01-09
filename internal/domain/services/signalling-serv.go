@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"sync"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
 	"test/internal/protocols"
@@ -14,6 +13,7 @@ import (
 	"test/pkg/validator"
 
 	"github.com/quic-go/quic-go"
+	"golang.org/x/sync/errgroup"
 )
 
 type SignallingService interface {
@@ -221,24 +221,26 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 		return processError(uc, err, msgId)
 	}
 	log.Info("receivers connections received successfully")
-	var wg sync.WaitGroup
+	g, gCtx := errgroup.WithContext(ctx)
 	log.Info("opening receivers streams", userLogsData...)
 	for _, r := range receivers {
 		logReceiverId := logger.Attr("receiverId", r.ID)
 		logMsgId := logger.Attr("msgId", msgId)
 		receiverLogsData := logger.NewLogData(logMsgId, logReceiverId)
-		wg.Go(func() {
-			receiverStream, err := r.Connect.OpenUniStreamSync(ctx)
+		g.Go(func() error {
+			receiverStream, err := r.Connect.OpenUniStreamSync(gCtx)
 			if err != nil {
 				log.Error("failed to open receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId)...)
 				if err := processError(uc, err, msgId); err != nil {
 					log.Error("failed to proccess error", logger.Err(err))
 				}
+				return err
 			}
+
 			defer func() {
 				log.Info("closing receiver's stream", receiverLogsData...)
 				if err := receiverStream.Close(); err != nil {
-					log.Error("failed to close receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId, msgId)...)
+					log.Error("failed to close receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
 					if err := processError(uc, err, msgId); err != nil {
 						log.Error("failed to proccess error", logger.Err(err))
 					}
@@ -248,21 +250,28 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 			}()
 			log.Info("receiver's stream is opened", receiverLogsData...)
 			if _, err := receiverStream.Write(replyMsg); err != nil {
-				log.Error("failed to write message to receiver", logger.NewLogData(logger.Err(err), logReceiverId, msgId)...)
+				log.Error("failed to write message to receiver", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
 				if err := processError(uc, err, msgId); err != nil {
-					log.Error("failed to proccess error", logger.NewLogData(logger.Err(err), logReceiverId, msgId)...)
+					log.Error("failed to proccess error", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
+					return err
 				}
 			}
-
-			log.Info("message sended successfully", userLogsData...)
-			if err := writeSuccessMsg(uc.ctrlStream, msgId); err != nil {
-				log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logReceiverId, msgId)...)
-
-			}
+			return nil
 		})
 	}
-
-	wg.Wait()
+	if err := g.Wait(); err != nil {
+		if cerr := checkErr(ctx, err); cerr != nil {
+			log.Error("failed to write message to receivers", logger.NewLogData(logger.Err(err), logMsgId)...)
+			if perr := processError(uc, err, msgId); perr != nil {
+				log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logMsgId)...)
+			}
+		}
+		return errs.NewAppError(op, err)
+	}
+	log.Info("message sended successfully", userLogsData...)
+	if err := writeSuccessMsg(uc.ctrlStream, msgId); err != nil {
+		log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
+	}
 
 	return nil
 }
