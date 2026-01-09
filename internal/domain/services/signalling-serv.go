@@ -60,7 +60,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return nil
 	}
-	logStreamId := logger.Attr("id", stream.StreamID())
+	logStreamId := logger.Attr("streamId", stream.StreamID())
 	log.Info("new stream", logStreamId, logAddr)
 	decoder := json.NewDecoder(stream)
 	var msg protocols.Message
