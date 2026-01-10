@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package protocols;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "protools.v1;pb";
+
+message Message {
+    string id = 1;
+    uint32 type = 2;
+    oneof payload {
+        RegisterConnectMessage register = 3;
+        SendPayloadMessage send = 4;
+    }
+}
+
+message RegisterConnectMessage{
+    string id = 1;
+}
+
+message SendPayloadMessage{
+    repeated string receviers = 1;
+    bytes payload = 2;
+}
+
+message ReplyMessage{
+    string sender_id = 1;
+    bytes payload = 2;
+}
+
+message ResponseMessage{
+    int32 code = 1;
+    string msg_id = 2;
+    string msg = 3;
+}
+
+service MessageService{
+    rpc SendMessage (Message) returns (ReplyMessage){}
+}
+
