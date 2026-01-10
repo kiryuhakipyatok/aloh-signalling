@@ -105,7 +105,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	logUserData := logger.NewLogData(logMsgId, logUserId)
 	if err := ss.ConnectionRepo.AddConnect(ctx, user); err != nil {
 		log.Error("faield to add connect", logger.NewLogData(logMsgId, logger.Err(err))...)
-		return processError(userConnection, err, regMsg.ID)
+		return processError(userConnection, err, msg.Id)
 	}
 	log.Info("user is registered", logUserData...)
 	if err := writeSuccessMsg(stream, msg.Id); err != nil {
