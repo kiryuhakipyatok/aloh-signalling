@@ -27,6 +27,6 @@ deploy-job:
       SERVER_PORT=$SERVER_PORT
       EOF
     - docker-compose rm -s -f aloh || true
-    - docker-compose up -f docker-compose.yaml -d aloh
+    - docker-compose -f docker-compose.yaml up -d --force-recreate aloh
     - sleep 5
     - docker-compose logs aloh
