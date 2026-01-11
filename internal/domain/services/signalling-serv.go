@@ -3,8 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"io"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
 	"test/internal/protocols"
@@ -71,7 +69,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		decoder:    decoder,
 	}
 
-	if err := ss.processMsg(userConnection, &msg); err != nil {
+	if err := ss.processMsg(ctx, userConnection, &msg); err != nil {
 		log.Error("failed to process message", logger.Err(err), logStreamId, logAddr)
 		return errs.NewAppError(op, err)
 	}
@@ -79,23 +77,13 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	logMsgId := logger.Attr("msgId", msg.Id)
 
 	if *msg.Type != regType {
-
-		log.Error("invalid message type", logger.NewLogData(logger.Attr("msgType", msg.Type), logMsgId)...)
-		typeErr, merr := protocols.InvalidTypeErrorMessage(msg.Id)
-		if merr != nil {
-			log.Error("failed to build stream error message", logger.NewLogData(logger.Err(merr), logMsgId)...)
-			return errs.NewAppError(op, merr)
-		}
-		if err := writeMsg(stream, typeErr); err != nil {
-			log.Error("failed to write message", logger.NewLogData(logger.Err(err), logMsgId)...)
-			return errs.NewAppError(op, err)
-		}
-		return errs.NewAppError(op, err)
+		log.Error("wrong message type", logger.NewLogData(logger.Attr("msgType", msg.Type), logMsgId)...)
+		return processError(ctx, userConnection, errs.ErrWrongMessageType(op), msg.Id)
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Info("failed to cast message", logger.NewLogData(logger.Err(err), logMsgId)...)
-		return processError(userConnection, err, msg.Id)
+		return processError(ctx, userConnection, err, msg.Id)
 	}
 	user := &models.User{
 		ID:      regMsg.ID,
@@ -104,23 +92,24 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	logUserId := logger.Attr("userID", user.ID)
 	logUserData := logger.NewLogData(logMsgId, logUserId)
 	if err := ss.ConnectionRepo.AddConnect(ctx, user); err != nil {
-		log.Error("faield to add connect", logger.NewLogData(logMsgId, logger.Err(err))...)
-		return processError(userConnection, err, msg.Id)
+		log.Error("failed to add connect", logger.NewLogData(logMsgId, logger.Err(err))...)
+		return processError(ctx, userConnection, err, msg.Id)
 	}
+	defer func() {
+		if err := ss.ConnectionRepo.DeleteConnect(ctx, user.ID); err != nil {
+			log.Error("faield to delete connect", logUserId, logger.Err(err))
+			if err := processError(ctx, userConnection, err, ""); err != nil {
+				log.Error("failed to process error", logger.Err(err), logUserId)
+			}
+		} else {
+			log.Info("connect is deleted successfully", logUserId)
+		}
+	}()
 	log.Info("user is registered", logUserData...)
-	if err := writeSuccessMsg(stream, msg.Id); err != nil {
+	if err := writeSuccessMsg(ctx, stream, msg.Id); err != nil {
 		log.Error("failed to write success message", logger.NewLogData(logMsgId, logger.Err(err))...)
 		return errs.NewAppError(op, err)
 	}
-	defer func() {
-		if err := ss.ConnectionRepo.DeleteConnect(ctx, ""); err != nil {
-			log.Error("faield to delete connect", logUserId, logger.Err(err))
-			if err := processError(userConnection, err, ""); err != nil {
-				log.Error("failed to process error", logger.Err(err), logUserId)
-			}
-		}
-		log.Info("connect is deleted successfully", logUserId)
-	}()
 	userConnection.userId = user.ID
 	return ss.commandLoop(ctx, userConnection)
 }
@@ -137,7 +126,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 			if merr != nil {
 				log.Error("failed to build stream error message", logger.Err(merr), logUserId)
 			}
-			if err := writeMsg(uc.ctrlStream, streamErr); err != nil {
+			if err := writeMsg(ctx, uc.ctrlStream, streamErr); err != nil {
 				log.Error("failed to write message", logger.Err(err), logUserId)
 			}
 		} else {
@@ -156,12 +145,12 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		default:
 		}
 		var msg protocols.Message
-		if err := ss.processMsg(uc, &msg); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
+		if err := ss.processMsg(ctx, uc, &msg); err != nil {
+			if cerr := checkErr(ctx, err); cerr != nil {
+				log.Error("failed to process message", logger.Err(err), logUserId)
+				return errs.NewAppError(op, err)
 			}
-			log.Error("failed to process message", logger.Err(err), logUserId)
-			return errs.NewAppError(op, err)
+			return nil
 		}
 		logMsgId := logger.Attr("msgId", msg.Id)
 		switch *msg.Type {
@@ -187,7 +176,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 			if merr != nil {
 				log.Error("failed to build stream error message", logger.NewLogData(logger.Err(merr), logUserId)...)
 			}
-			if err := writeMsg(uc.ctrlStream, typeErr); err != nil {
+			if err := writeMsg(ctx, uc.ctrlStream, typeErr); err != nil {
 				log.Error("failed to write message", logger.Err(err))
 			}
 		}
@@ -207,18 +196,18 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 	sendPayloadMsg, err := protocols.ToSendPayloadMessage(ss.Validator, payloadData)
 	if err != nil {
 		log.Error("failed to cast send message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(uc, err, msgId)
+		return processError(ctx, uc, err, msgId)
 	}
 	replyMsg, err := protocols.NewReplyMessage(uc.userId, sendPayloadMsg.Payload)
 	if err != nil {
 		log.Error("failed to send cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(uc, err, msgId)
+		return processError(ctx, uc, err, msgId)
 	}
 	log.Info("getting receivers connections", userLogsData...)
 	receivers, err := ss.ConnectionRepo.GetConnects(ctx, sendPayloadMsg.RecevierIDs)
 	if err != nil {
 		log.Error("failed to get contacts", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(uc, err, msgId)
+		return processError(ctx, uc, err, msgId)
 	}
 	log.Info("receivers connections received successfully")
 	g, gCtx := errgroup.WithContext(ctx)
@@ -231,7 +220,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 			receiverStream, err := r.Connect.OpenUniStreamSync(gCtx)
 			if err != nil {
 				log.Error("failed to open receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId)...)
-				if err := processError(uc, err, msgId); err != nil {
+				if err := processError(ctx, uc, err, msgId); err != nil {
 					log.Error("failed to proccess error", logger.Err(err))
 				}
 				return err
@@ -241,7 +230,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 				log.Info("closing receiver's stream", receiverLogsData...)
 				if err := receiverStream.Close(); err != nil {
 					log.Error("failed to close receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-					if err := processError(uc, err, msgId); err != nil {
+					if err := processError(ctx, uc, err, msgId); err != nil {
 						log.Error("failed to proccess error", logger.Err(err))
 					}
 				} else {
@@ -251,7 +240,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 			log.Info("receiver's stream is opened", receiverLogsData...)
 			if _, err := receiverStream.Write(replyMsg); err != nil {
 				log.Error("failed to write message to receiver", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-				if err := processError(uc, err, msgId); err != nil {
+				if err := processError(ctx, uc, err, msgId); err != nil {
 					log.Error("failed to proccess error", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
 					return err
 				}
@@ -260,16 +249,17 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 		})
 	}
 	if err := g.Wait(); err != nil {
-		if cerr := checkErr(ctx, err); cerr != nil {
-			log.Error("failed to write message to receivers", logger.NewLogData(logger.Err(err), logMsgId)...)
-			if perr := processError(uc, err, msgId); perr != nil {
-				log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logMsgId)...)
-			}
+		if cerr := checkErr(ctx, err); cerr == nil {
+			return cerr
+		}
+		log.Error("failed to send message to receivers", logger.NewLogData(logger.Err(err), logMsgId)...)
+		if perr := processError(ctx, uc, err, msgId); perr != nil {
+			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logMsgId)...)
 		}
 		return errs.NewAppError(op, err)
 	}
 	log.Info("message sended successfully", userLogsData...)
-	if err := writeSuccessMsg(uc.ctrlStream, msgId); err != nil {
+	if err := writeSuccessMsg(ctx, uc.ctrlStream, msgId); err != nil {
 		log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
 	}
 

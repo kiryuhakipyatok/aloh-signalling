@@ -15,6 +15,7 @@ var (
 	notFound             = "not found"
 	alreadyExists        = "already exists"
 	requestTimeout       = "request timeout"
+	invalidType          = "wrong message type"
 )
 
 type ResponseMessage struct {
@@ -55,7 +56,7 @@ func InvalidProtocolErrorMessage(mid string) ([]byte, error) {
 
 func InvalidTypeErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InvalidTypeErrorMessage"
-	em := NewResponseMessage(mid, invalidProtocolError, int8(quic.ProtocolViolation))
+	em := NewResponseMessage(mid, invalidType, int8(quic.ProtocolViolation))
 	return marshalError(op, em)
 }
 

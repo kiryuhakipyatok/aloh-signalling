@@ -1,6 +1,6 @@
 services:
   aloh:
-    image: aloh-image:latest
+    build: .
     container_name: aloh
     env_file:
       - .env
@@ -8,4 +8,4 @@ services:
       - "${SERVER_PORT}:${SERVER_PORT}/tcp" 
       - "${SERVER_PORT}:${SERVER_PORT}/udp"
     volumes:
-      - ./certs:/etc/certs:ro 
+      - ../certs:/etc/certs:ro 

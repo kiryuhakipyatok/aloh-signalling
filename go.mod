@@ -3,7 +3,7 @@ module test
 go 1.25.5
 
 require (
-	github.com/quic-go/quic-go v0.57.1
+	github.com/quic-go/quic-go v0.59.0
 	github.com/spf13/viper v1.21.0
 )
 

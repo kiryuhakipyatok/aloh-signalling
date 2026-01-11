@@ -15,7 +15,7 @@ docker-run-infra:
 	@docker compose up -d postgres
 
 docker-run-app:
-	@docker compose up aloh --build
+	@docker compose -f docker-compose.dev.yaml up aloh --build
 
 docker-run-all: test docker-migrate-up docker-run-app
 

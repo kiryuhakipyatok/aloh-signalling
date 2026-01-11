@@ -56,8 +56,8 @@ func ErrRequestTimeout(op string) AppError {
 	return AppError{Op: op, Err: fmt.Errorf("%w", ErrRequestTimeoutBase)}
 }
 
-func ErrWrongMessageType(op string, err error) AppError {
-	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrWrongMessageTypeBase, err)}
+func ErrWrongMessageType(op string) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w", ErrWrongMessageTypeBase)}
 }
 
 func ErrInvalidJson(op string, err error) AppError {
