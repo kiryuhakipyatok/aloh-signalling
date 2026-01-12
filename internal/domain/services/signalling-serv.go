@@ -68,11 +68,20 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		ctrlStream: stream,
 		decoder:    decoder,
 	}
-
-	if err := ss.processMsg(ctx, userConnection, &msg); err != nil {
-		log.Error("failed to process message", logger.Err(err), logStreamId, logAddr)
-		return errs.NewAppError(op, err)
+	if err := ss.processMsg(userConnection, &msg); err != nil {
+		if cerr := checkErr(ctx, err); cerr != nil {
+			log.Error("failed to process message", logger.Err(cerr), logAddr)
+			ss.closeConnection(ctx, userConnection, 1, "protocol violation")
+			return errs.NewAppError(op, err)
+		}
+		ss.closeConnection(ctx, userConnection, 0, "client done")
+		return nil
 	}
+	// if err := ss.processMsg(userConnection, &msg); err != nil {
+	// 	log.Error("failed to process message", logger.Err(err), logStreamId, logAddr)
+
+	// 	return errs.NewAppError(op, err)
+	// }
 
 	logMsgId := logger.Attr("msgId", msg.Id)
 
@@ -97,7 +106,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, user.ID); err != nil {
-			log.Error("faield to delete connect", logUserId, logger.Err(err))
+			log.Error("failed to delete connect", logUserId, logger.Err(err))
 			if err := processError(ctx, userConnection, err, ""); err != nil {
 				log.Error("failed to process error", logger.Err(err), logUserId)
 			}
@@ -119,20 +128,6 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 	log := ss.Logger.AddOp(op)
 	logUserId := logger.Attr("userID", uc.userId)
 	log.Info("serving connection in command loop...", logUserId)
-	defer func() {
-		if err := uc.ctrlStream.Close(); err != nil {
-			log.Error("failed to close command stream", logUserId, logger.Err(err))
-			streamErr, merr := protocols.StreamErrorMessage("")
-			if merr != nil {
-				log.Error("failed to build stream error message", logger.Err(merr), logUserId)
-			}
-			if err := writeMsg(ctx, uc.ctrlStream, streamErr); err != nil {
-				log.Error("failed to write message", logger.Err(err), logUserId)
-			}
-		} else {
-			log.Info("command stream is closed successfully", logUserId)
-		}
-	}()
 
 	for {
 		select {
@@ -145,11 +140,13 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		default:
 		}
 		var msg protocols.Message
-		if err := ss.processMsg(ctx, uc, &msg); err != nil {
+		if err := ss.processMsg(uc, &msg); err != nil {
 			if cerr := checkErr(ctx, err); cerr != nil {
-				log.Error("failed to process message", logger.Err(err), logUserId)
+				log.Error("failed to process message", logger.Err(cerr), logUserId)
+				ss.closeConnection(ctx, uc, 1, "protocol violation")
 				return errs.NewAppError(op, err)
 			}
+			ss.closeConnection(ctx, uc, 0, "client done")
 			return nil
 		}
 		logMsgId := logger.Attr("msgId", msg.Id)
@@ -164,9 +161,9 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 			}()
 		case disconnType:
 			log.Info("user disconnecting...", logUserId)
-			if err := uc.quicConn.CloseWithError(0, "user disconnected"); err != nil {
-				log.Error("faield to disconnect user", logger.Err(err), logUserId)
-				return err
+			if err := ss.closeConnection(ctx, uc, 0, "user disconnected"); err != nil {
+				log.Error("failed when user is disconnecting", logUserId, logger.Err(err))
+				return errs.NewAppError(op, err)
 			}
 			log.Info("user disconnected successfully", logUserId)
 			return nil
@@ -263,5 +260,23 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 		log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
 	}
 
+	return nil
+}
+
+func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection, code int, desc string) error {
+	op := "signalService.closeConnection"
+	log := ss.Logger.AddOp(op)
+	logUserId := logger.Attr("userId", uc.userId)
+	log.Info("connection closing...", logUserId)
+	uc.ctrlStream.CancelWrite(quic.StreamErrorCode(1))
+	select {
+	case <-uc.ctrlStream.Context().Done():
+	case <-ctx.Done():
+	}
+	if clerr := uc.quicConn.CloseWithError(quic.ApplicationErrorCode(code), desc); clerr != nil {
+		log.Error("failed to close connection", logger.Err(clerr), logUserId)
+		return errs.NewAppError(op, clerr)
+	}
+	log.Info("connection closed successfully", logUserId)
 	return nil
 }

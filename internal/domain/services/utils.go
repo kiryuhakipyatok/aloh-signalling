@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"test/internal/protocols"
 	"test/pkg/errs"
@@ -39,28 +40,14 @@ func writeMsg(ctx context.Context, stream *quic.Stream, msg []byte) error {
 	return nil
 }
 
-func (ss *signalService) processMsg(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
+func (ss *signalService) processMsg(uc *userConnection, msg *protocols.Message) error {
 	op := "utils.produceMsg"
 
 	if err := uc.decoder.Decode(msg); err != nil {
-		dataErr, merr := protocols.InvalidProtocolErrorMessage(msg.Id)
-		if merr != nil {
-			return merr
-		}
-		if err := writeMsg(ctx, uc.ctrlStream, dataErr); err != nil {
-			return err
-		}
+		fmt.Println("d")
 		return errs.ErrDecodeMsg(op, err)
 	}
 	if err := ss.Validator.Validate.Struct(msg); err != nil {
-
-		dataErr, merr := protocols.InvalidProtocolErrorMessage(msg.Id)
-		if merr != nil {
-			return merr
-		}
-		if err := writeMsg(ctx, uc.ctrlStream, dataErr); err != nil {
-			return err
-		}
 
 		return errs.ErrValidation(op, err)
 	}
@@ -123,8 +110,10 @@ func processError(ctx context.Context, uc *userConnection, err error, msgId stri
 			return err
 		}
 	}
+
 	if err := writeMsg(ctx, uc.ctrlStream, pErr); err != nil {
 		return err
 	}
+
 	return nil
 }

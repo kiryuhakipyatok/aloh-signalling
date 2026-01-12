@@ -9,7 +9,8 @@ type Validator struct {
 }
 
 func NewValidator() *Validator {
+	v := validator.New()
 	return &Validator{
-		Validate: validator.New(),
+		Validate: v,
 	}
 }

@@ -10,7 +10,7 @@ import (
 type Message struct {
 	Id   string          `json:"id" validate:"required,min=1"`
 	Type *uint8          `json:"type" validate:"required"`
-	Data json.RawMessage `json:"data" validate:"required,min=1"`
+	Data json.RawMessage `json:"data" validate:"required"`
 }
 
 type RegisterConnectMessage struct {
@@ -19,12 +19,12 @@ type RegisterConnectMessage struct {
 
 type SendPayloadMessage struct {
 	RecevierIDs []string        `json:"ids" validate:"required,min=1"`
-	Payload     json.RawMessage `json:"payload" validate:"required,min=1"`
+	Payload     json.RawMessage `json:"payload" validate:"required"`
 }
 
 type ReplyMessage struct {
 	Sender  string          `json:"sender-id" validate:"required,min=1"`
-	Payload json.RawMessage `json:"payload" validate:"required,min=1"`
+	Payload json.RawMessage `json:"payload" validate:"required"`
 }
 
 func ToRegisterConnectMessage(v *validator.Validator, data json.RawMessage) (*RegisterConnectMessage, error) {
