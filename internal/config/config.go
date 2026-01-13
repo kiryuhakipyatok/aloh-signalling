@@ -31,6 +31,7 @@ type Server struct {
 	StartTimeout           time.Duration `mapstructure:"startTimeout"`
 	NextProtos             []string      `mapstructure:"nextProtos"`
 	CertsPath              string        `mapstructure:"certsPath"`
+	MaxIncomingStreams     int64         `mapstructure:"maxIncomingStreams"`
 }
 
 func NewConfig(path string) *Config {
@@ -44,7 +45,7 @@ func NewConfig(path string) *Config {
 	}
 	data = []byte(os.ExpandEnv(string(data)))
 	v := viper.New()
-	v.SetConfigName("app-config")
+	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	cfg := &Config{}
 	if err := v.ReadConfig(bytes.NewBuffer(data)); err != nil {

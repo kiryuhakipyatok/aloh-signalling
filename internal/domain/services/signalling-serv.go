@@ -77,11 +77,6 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		ss.closeConnection(ctx, userConnection, 0, "client done")
 		return nil
 	}
-	// if err := ss.processMsg(userConnection, &msg); err != nil {
-	// 	log.Error("failed to process message", logger.Err(err), logStreamId, logAddr)
-
-	// 	return errs.NewAppError(op, err)
-	// }
 
 	logMsgId := logger.Attr("msgId", msg.Id)
 

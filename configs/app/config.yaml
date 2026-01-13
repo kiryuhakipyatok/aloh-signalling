@@ -13,5 +13,6 @@ server:
   startTimeout: 10s
   certsPath: "../etc/certs"
   nextProtos: ["aloh-proto"]
+  maxIncomingStreams: 100
 
   
