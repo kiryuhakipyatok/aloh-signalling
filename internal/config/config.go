@@ -38,7 +38,7 @@ func NewConfig(path string) *Config {
 	if path == "" {
 		panic(fmt.Errorf("config path is empty"))
 	}
-	filename := filepath.Join(path, "app-config.yaml")
+	filename := filepath.Join(path, "config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		panic(fmt.Errorf("failed to read config file: %w", err))
