@@ -35,6 +35,7 @@ func NewSignallingService(cr repository.ConnectionsRepo, v *validator.Validator,
 const (
 	regType = iota
 	sendType
+	datagramType
 	disconnType
 )
 
@@ -46,9 +47,12 @@ type userConnection struct {
 }
 
 func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) error {
-	op := "signalService.ServeConnection"
-	log := ss.Logger.AddOp(op)
-	logAddr := logger.Attr("address", conn.RemoteAddr().String())
+	var (
+		op      = "signalService.ServeConnection"
+		log     = ss.Logger.AddOp(op)
+		logAddr = logger.Attr("address", conn.RemoteAddr().String())
+	)
+
 	log.Info("connection serving...", logAddr)
 	stream, err := conn.AcceptStream(ctx)
 	if err != nil {
@@ -119,9 +123,12 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 }
 
 func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) error {
-	op := "signalService.commandLoop"
-	log := ss.Logger.AddOp(op)
-	logUserId := logger.Attr("userID", uc.userId)
+	var (
+		op        = "signalService.commandLoop"
+		log       = ss.Logger.AddOp(op)
+		logUserId = logger.Attr("userID", uc.userId)
+	)
+
 	log.Info("serving connection in command loop...", logUserId)
 
 	for {
@@ -146,10 +153,16 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		}
 		logMsgId := logger.Attr("msgId", msg.Id)
 		switch *msg.Type {
-
+		case datagramType:
+			go func() {
+				if err := ss.datagramProxing(ctx, uc, &msg); err != nil {
+					log.Error("failed to datagram proxing", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+					return
+				}
+			}()
 		case sendType:
 			go func() {
-				if err := ss.sendMsg(ctx, uc, msg.Data, msg.Id); err != nil {
+				if err := ss.sendMsg(ctx, uc, &msg); err != nil {
 					log.Error("message sending is failed", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 					return
 				}
@@ -176,13 +189,18 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 
 }
 
-func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloadData []byte, msgId string) error {
-	op := "signalService.sendMsg"
-	log := ss.Logger.AddOp(op)
-	userId := uc.userId
-	logUserId := logger.Attr("userId", userId)
-	logMsgId := logger.Attr("msgId", msgId)
-	userLogsData := logger.NewLogData(logUserId, logMsgId)
+func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
+	var (
+		op           = "signalService.sendMsg"
+		log          = ss.Logger.AddOp(op)
+		userId       = uc.userId
+		msgId        = msg.Id
+		payloadData  = msg.Data
+		logUserId    = logger.Attr("userId", userId)
+		logMsgId     = logger.Attr("msgId", msgId)
+		userLogsData = logger.NewLogData(logUserId, logMsgId)
+	)
+
 	log.Info("message sending...", userLogsData...)
 
 	sendPayloadMsg, err := protocols.ToSendPayloadMessage(ss.Validator, payloadData)
@@ -206,13 +224,12 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 	log.Info("opening receivers streams", userLogsData...)
 	for _, r := range receivers {
 		logReceiverId := logger.Attr("receiverId", r.ID)
-		logMsgId := logger.Attr("msgId", msgId)
 		receiverLogsData := logger.NewLogData(logMsgId, logReceiverId)
 		g.Go(func() error {
 			receiverStream, err := r.Connect.OpenUniStreamSync(gCtx)
 			if err != nil {
 				log.Error("failed to open receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId)...)
-				if err := processError(ctx, uc, err, msgId); err != nil {
+				if err := processError(gCtx, uc, err, msgId); err != nil {
 					log.Error("failed to proccess error", logger.Err(err))
 				}
 				return err
@@ -222,7 +239,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 				log.Info("closing receiver's stream", receiverLogsData...)
 				if err := receiverStream.Close(); err != nil {
 					log.Error("failed to close receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-					if err := processError(ctx, uc, err, msgId); err != nil {
+					if err := processError(gCtx, uc, err, msgId); err != nil {
 						log.Error("failed to proccess error", logger.Err(err))
 					}
 				} else {
@@ -232,7 +249,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 			log.Info("receiver's stream is opened", receiverLogsData...)
 			if _, err := receiverStream.Write(replyMsg); err != nil {
 				log.Error("failed to write message to receiver", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-				if err := processError(ctx, uc, err, msgId); err != nil {
+				if err := processError(gCtx, uc, err, msgId); err != nil {
 					log.Error("failed to proccess error", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
 					return err
 				}
@@ -258,10 +275,92 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, payloa
 	return nil
 }
 
+func (ss *signalService) datagramProxing(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
+	var (
+		op          = "signalService.datagramStream"
+		log         = ss.Logger.AddOp(op)
+		msgId       = msg.Id
+		logUserId   = logger.Attr("userId", uc.userId)
+		logMsgId    = logger.Attr("msgId", msgId)
+		logUserData = logger.NewLogData(logUserId, logMsgId)
+	)
+
+	log.Info("datagram proxing...", logUserData...)
+	datagramProxingData, err := protocols.ToDatagramProxingMessage(ss.Validator, msg.Data)
+	if err != nil {
+		log.Error("failed to cast datagram proxing message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return processError(ctx, uc, err, msgId)
+	}
+
+	log.Info("getting receivers connections", logUserData...)
+	receivers, err := ss.ConnectionRepo.GetConnects(ctx, datagramProxingData.RecevierIDs)
+	if err != nil {
+		log.Error("failed to get contacts", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return processError(ctx, uc, err, msgId)
+	}
+	log.Info("receivers connections received successfully")
+	g, gCtx := errgroup.WithContext(ctx)
+	log.Info("opening pipes with receivers...", logUserData...)
+	for _, r := range receivers {
+		logReceiverId := logger.Attr("receiverId", r.ID)
+		receiverLogsData := logger.NewLogData(logMsgId, logReceiverId, logUserId)
+		g.Go(func() error {
+			log.Info("user's datagram pipe is opened", receiverLogsData...)
+			for {
+				p, err := uc.quicConn.ReceiveDatagram(gCtx)
+				if err != nil {
+					log.Error("failed to receive datagram from receiver", logger.NewLogData(logger.Err(err), logUserId, logReceiverId, logMsgId)...)
+					return err
+				}
+				if err := r.Connect.SendDatagram([]byte(p)); err != nil {
+					log.Error("failed to send datagram to receiver", logger.NewLogData(logger.Err(err), logUserId, logReceiverId, logMsgId)...)
+					return err
+				}
+			}
+
+		})
+		g.Go(func() error {
+			log.Info("receiver's datagram pipe is opened", receiverLogsData...)
+			for {
+				p, err := r.Connect.ReceiveDatagram(gCtx)
+				if err != nil {
+					log.Error("failed to receive datagram from user", logger.NewLogData(logger.Err(err), logReceiverId, logUserId, logMsgId)...)
+					return err
+				}
+				if err := uc.quicConn.SendDatagram([]byte(p)); err != nil {
+					log.Error("failed to send datagram to user", logger.NewLogData(logger.Err(err), logReceiverId, logUserId, logMsgId)...)
+					return err
+				}
+			}
+		})
+	}
+
+	log.Info("users are connected with datagram pipes", logUserData...)
+
+	if err := g.Wait(); err != nil {
+		if cerr := checkErr(ctx, err); cerr == nil {
+			return cerr
+		}
+		log.Error("failed to send prox datagrams", logger.NewLogData(logger.Err(err), logUserId, logUserId)...)
+		if perr := processError(ctx, uc, err, "datagram"); perr != nil {
+			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+		}
+		return errs.NewAppError(op, err)
+	}
+	log.Info("datagram proxing closing successfully", logUserData...)
+	if err := writeSuccessMsg(ctx, uc.ctrlStream, "datagram"); err != nil {
+		log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+	}
+	return nil
+}
+
 func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection, code int, desc string) error {
-	op := "signalService.closeConnection"
-	log := ss.Logger.AddOp(op)
-	logUserId := logger.Attr("userId", uc.userId)
+	var (
+		op        = "signalService.closeConnection"
+		log       = ss.Logger.AddOp(op)
+		logUserId = logger.Attr("userId", uc.userId)
+	)
+
 	log.Info("connection closing...", logUserId)
 	uc.ctrlStream.CancelWrite(quic.StreamErrorCode(1))
 	select {

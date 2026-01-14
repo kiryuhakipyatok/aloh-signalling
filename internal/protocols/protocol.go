@@ -22,6 +22,10 @@ type SendPayloadMessage struct {
 	Payload     json.RawMessage `json:"payload" validate:"required"`
 }
 
+type DatagramProxingMessage struct {
+	RecevierIDs []string `json:"ids" validate:"required,min=1"`
+}
+
 type ReplyMessage struct {
 	Sender  string          `json:"sender-id" validate:"required,min=1"`
 	Payload json.RawMessage `json:"payload" validate:"required"`
@@ -62,4 +66,16 @@ func NewReplyMessage(senderId string, pyaload json.RawMessage) ([]byte, error) {
 		return nil, errs.ErrInvalidJson(op, err)
 	}
 	return replyMsg, nil
+}
+
+func ToDatagramProxingMessage(v *validator.Validator, data json.RawMessage) (*DatagramProxingMessage, error) {
+	op := "protocols.ToDatagramProxingMessage"
+	datagramMsg := &DatagramProxingMessage{}
+	if err := json.Unmarshal(data, datagramMsg); err != nil {
+		return nil, errs.ErrInvalidJson(op, err)
+	}
+	if err := v.Validate.Struct(datagramMsg); err != nil {
+		return nil, errs.ErrValidation(op, err)
+	}
+	return datagramMsg, nil
 }

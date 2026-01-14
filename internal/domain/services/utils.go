@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"test/internal/protocols"
 	"test/pkg/errs"
@@ -13,13 +12,10 @@ import (
 
 func checkErr(ctx context.Context, err error) error {
 
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil || errors.Is(err, io.EOF) {
 		return nil
 	}
 
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
 	var appErr *quic.ApplicationError
 	if errors.As(err, &appErr) {
 		if appErr.ErrorCode == 0 {
@@ -32,19 +28,17 @@ func checkErr(ctx context.Context, err error) error {
 }
 
 func writeMsg(ctx context.Context, stream *quic.Stream, msg []byte) error {
-	op := "utils.writeMsg"
 	_, err := stream.Write(msg)
 	if err != nil {
-		return checkErr(ctx, errs.NewAppError(op, err))
+		return checkErr(ctx, err)
 	}
 	return nil
 }
 
 func (ss *signalService) processMsg(uc *userConnection, msg *protocols.Message) error {
-	op := "utils.produceMsg"
+	op := "signalService.produceMsg"
 
 	if err := uc.decoder.Decode(msg); err != nil {
-		fmt.Println("d")
 		return errs.ErrDecodeMsg(op, err)
 	}
 	if err := ss.Validator.Validate.Struct(msg); err != nil {
@@ -55,13 +49,12 @@ func (ss *signalService) processMsg(uc *userConnection, msg *protocols.Message) 
 }
 
 func writeSuccessMsg(ctx context.Context, stream *quic.Stream, msgId string) error {
-	op := "utils.writeSuccessMsg"
 	sm, err := protocols.SuccessMessage(msgId)
 	if err != nil {
-		return errs.NewAppError(op, err)
+		return err
 	}
 	if err := writeMsg(ctx, stream, sm); err != nil {
-		return errs.NewAppError(op, err)
+		return err
 	}
 	return nil
 }
