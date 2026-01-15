@@ -25,7 +25,7 @@ type ResponseMessage struct {
 }
 
 func (rm ResponseMessage) Error() string {
-	return fmt.Sprintf("msgId: %s, code: %d, error: %v", rm.MessageId, rm.Code, rm.Msg)
+	return fmt.Sprintf("msgId: %s, code: %d, msg: %v", rm.MessageId, rm.Code, rm.Msg)
 }
 
 func NewResponseMessage(mid string, msg string, code int8) ResponseMessage {
