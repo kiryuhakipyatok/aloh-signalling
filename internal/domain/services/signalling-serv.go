@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
 	"test/internal/protocols"
@@ -400,7 +399,7 @@ func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection
 
 func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, msgId string) error {
 	var (
-		op          = "signalService.getOnfetchOnlineline"
+		op          = "signalService.fetchOnline"
 		log         = ss.Logger.AddOp(op)
 		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msgId)
@@ -412,7 +411,11 @@ func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, ms
 		log.Error("failed to fetch all connects ids", logger.Err(err))
 		return errs.NewAppError(op, err)
 	}
-	payload := []byte(strings.Join(connectsIds, ","))
+	payload, err := json.Marshal(connectsIds)
+	if err != nil {
+		log.Error("failed to marshal connects ids", logger.Err(err))
+		return errs.NewAppError(op, err)
+	}
 
 	replyMsg, err := protocols.PayloadSuccessMessage(msgId, payload)
 	if err != nil {
