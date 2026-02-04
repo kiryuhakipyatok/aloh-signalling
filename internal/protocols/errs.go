@@ -38,49 +38,49 @@ func NewResponseMessage(mid string, code uint, payload []byte) ResponseMessage {
 
 func StreamErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.StreamErrorMessage"
-	em := NewResponseMessage(mid, STREAM_ERROR, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, STREAM_ERROR, nil)
 	return marshalResponse(op, em)
 }
 
 func InternalServerErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InternalServerErrorMessage"
-	em := NewResponseMessage(mid, INTERNAL_ERROR, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, INTERNAL_ERROR, nil)
 	return marshalResponse(op, em)
 }
 
 func InvalidProtocolErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InvalidProtocolErrorMessage"
-	em := NewResponseMessage(mid, INVALID_PROTOCOL, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, INVALID_PROTOCOL, nil)
 	return marshalResponse(op, em)
 }
 
 func InvalidTypeErrorMessage(mid string) ([]byte, error) {
 	op := "protocols.InvalidTypeErrorMessage"
-	em := NewResponseMessage(mid, INVALID_TYPE, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, INVALID_TYPE, nil)
 	return marshalResponse(op, em)
 }
 
 func ErrorNotFoundMessage(mid string) ([]byte, error) {
 	op := "protocols.ErrorNotFoundMessage"
-	em := NewResponseMessage(mid, NOT_FOUND, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, NOT_FOUND, nil)
 	return marshalResponse(op, em)
 }
 
 func ErrorAlreadyExistsMessage(mid string) ([]byte, error) {
 	op := "protocols.ErrorAlreadyExistsMessage"
-	em := NewResponseMessage(mid, ALREADY_EXISTS, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, ALREADY_EXISTS, nil)
 	return marshalResponse(op, em)
 }
 
 func ErrorRequestTimeoutMessage(mid string) ([]byte, error) {
 	op := "protocols.ErrorRequestTimeoutMessage"
-	em := NewResponseMessage(mid, REQUEST_TIMEOUT, json.RawMessage([]byte{}))
+	em := NewResponseMessage(mid, REQUEST_TIMEOUT, nil)
 	return marshalResponse(op, em)
 }
 
 func SuccessMessage(mid string) ([]byte, error) {
 	op := "protocols.SuccessMessage"
-	sm := NewResponseMessage(mid, SUCCESS, json.RawMessage([]byte{}))
+	sm := NewResponseMessage(mid, SUCCESS, nil)
 	return marshalResponse(op, sm)
 }
 
