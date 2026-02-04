@@ -414,7 +414,7 @@ func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, ms
 	}
 	payload := []byte(strings.Join(connectsIds, ","))
 
-	replyMsg, err := protocols.NewReplyMessage(uc.userId, payload)
+	replyMsg, err := protocols.PayloadSuccessMessage(msgId, payload)
 	if err != nil {
 		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
 		return errs.NewAppError(op, err)
