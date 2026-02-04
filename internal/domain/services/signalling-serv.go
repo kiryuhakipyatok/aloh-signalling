@@ -418,6 +418,7 @@ func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, ms
 		log.Error("failed to marshal connects ids", logger.Err(err))
 		return errs.NewAppError(op, err)
 	}
+	fmt.Println(string(payload))
 
 	replyMsg, err := protocols.PayloadSuccessMessage(msgId, payload)
 	if err != nil {
