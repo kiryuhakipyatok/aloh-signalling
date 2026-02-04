@@ -12,6 +12,7 @@ type ConnectionsRepo interface {
 	AddConnect(ctx context.Context, user *models.User) error
 	DeleteConnect(ctx context.Context, id string) error
 	GetConnects(ctx context.Context, ids []string) ([]models.User, error)
+	FetchAll(ctx context.Context) ([]string, error)
 }
 
 type connectionsRepo struct {
@@ -68,4 +69,23 @@ func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]mod
 		}
 		return users, nil
 	}
+}
+
+func (cr *connectionsRepo) FetchAll(ctx context.Context) ([]string, error) {
+	op := "connectionsRepo.GetAll"
+	ids := []string{}
+	select {
+	case <-ctx.Done():
+		return nil, errs.ErrRequestTimeout(op)
+	default:
+		cr.Range(func(key, value any) bool {
+			id, ok := key.(string)
+			if !ok {
+				return false
+			}
+			ids = append(ids, id)
+			return true
+		})
+	}
+	return ids, nil
 }

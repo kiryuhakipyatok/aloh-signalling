@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
 	"test/internal/protocols"
@@ -33,10 +34,11 @@ func NewSignallingService(cr repository.ConnectionsRepo, v *validator.Validator,
 }
 
 const (
-	regType = iota
-	sendType
-	datagramType
-	disconnType
+	REG_TYPE = iota
+	STREAM_TYPE
+	DATAGRAM_TYPE
+	DISCONN_TYPE
+	GET_ONLINE_TYPE
 )
 
 type userConnection struct {
@@ -84,14 +86,21 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 	logMsgId := logger.Attr("msgId", msg.Id)
 
-	if *msg.Type != regType {
-		log.Error("wrong message type", logger.NewLogData(logger.Attr("msgType", msg.Type), logMsgId)...)
-		return processError(ctx, userConnection, errs.ErrWrongMessageType(op), msg.Id)
+	if *msg.Type != REG_TYPE {
+		msgIdLog := logger.Attr("msgType", msg.Type)
+		log.Error("wrong message type", logger.NewLogData(msgIdLog, logMsgId)...)
+		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
+			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), msgIdLog, logMsgId)...)
+		}
+		return errs.NewAppError(op, err)
 	}
 	regMsg, err := protocols.ToRegisterConnectMessage(ss.Validator, msg.Data)
 	if err != nil {
-		log.Info("failed to cast message", logger.NewLogData(logger.Err(err), logMsgId)...)
-		return processError(ctx, userConnection, err, msg.Id)
+		log.Error("failed to cast message", logger.NewLogData(logger.Err(err), logMsgId)...)
+		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
+			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logMsgId)...)
+		}
+		return errs.NewAppError(op, err)
 	}
 	user := &models.User{
 		ID:      regMsg.ID,
@@ -101,7 +110,10 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	logUserData := logger.NewLogData(logMsgId, logUserId)
 	if err := ss.ConnectionRepo.AddConnect(ctx, user); err != nil {
 		log.Error("failed to add connect", logger.NewLogData(logMsgId, logger.Err(err))...)
-		return processError(ctx, userConnection, err, msg.Id)
+		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
+			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+		}
+		return errs.NewAppError(op, err)
 	}
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, user.ID); err != nil {
@@ -153,37 +165,63 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		}
 		logMsgId := logger.Attr("msgId", msg.Id)
 		switch *msg.Type {
-		case datagramType:
+		case DATAGRAM_TYPE:
 			go func() {
 				if err := ss.datagramProxing(ctx, uc, &msg); err != nil {
 					log.Error("failed to datagram proxing", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+					}
+					return
+				}
+				if err := writeSuccessMsg(ctx, uc.ctrlStream, msg.Id); err != nil {
+					log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
 					return
 				}
 			}()
-		case sendType:
+		case STREAM_TYPE:
 			go func() {
 				if err := ss.sendMsg(ctx, uc, &msg); err != nil {
 					log.Error("message sending is failed", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+					}
+					return
+				}
+				if err := writeSuccessMsg(ctx, uc.ctrlStream, msg.Id); err != nil {
+					log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
 					return
 				}
 			}()
-		case disconnType:
+		case DISCONN_TYPE:
 			log.Info("user disconnecting...", logUserId)
 			if err := ss.closeConnection(ctx, uc, 0, "user disconnected"); err != nil {
 				log.Error("failed when user is disconnecting", logUserId, logger.Err(err))
+				if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+					log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+				}
 				return errs.NewAppError(op, err)
 			}
 			log.Info("user disconnected successfully", logUserId)
 			return nil
+		case GET_ONLINE_TYPE:
+			go func() {
+				if err := ss.fetchOnline(ctx, uc, msg.Id); err != nil {
+					log.Error("failed to fetch online connects")
+					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+					}
+					return
+				}
+				if err := writeSuccessMsg(ctx, uc.ctrlStream, msg.Id); err != nil {
+					log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
+					return
+				}
+			}()
+
 		default:
 			log.Error("invalid message type", logger.NewLogData(logger.Attr("msgType", msg.Type), logMsgId, logUserId)...)
-			typeErr, merr := protocols.InvalidTypeErrorMessage(msg.Id)
-			if merr != nil {
-				log.Error("failed to build stream error message", logger.NewLogData(logger.Err(merr), logUserId)...)
-			}
-			if err := writeMsg(ctx, uc.ctrlStream, typeErr); err != nil {
-				log.Error("failed to write message", logger.Err(err))
-			}
+			processError(ctx, uc, errs.ErrWriteMsgBase, msg.Id)
 		}
 	}
 
@@ -206,18 +244,21 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 	sendPayloadMsg, err := protocols.ToSendPayloadMessage(ss.Validator, payloadData)
 	if err != nil {
 		log.Error("failed to cast send message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(ctx, uc, err, msgId)
+
+		return err
 	}
 	replyMsg, err := protocols.NewReplyMessage(uc.userId, sendPayloadMsg.Payload)
 	if err != nil {
-		log.Error("failed to send cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(ctx, uc, err, msgId)
+		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+
+		return err
 	}
 	log.Info("getting receivers connections", userLogsData...)
 	receivers, err := ss.ConnectionRepo.GetConnects(ctx, sendPayloadMsg.RecevierIDs)
 	if err != nil {
 		log.Error("failed to get contacts", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(ctx, uc, err, msgId)
+
+		return err
 	}
 	log.Info("receivers connections received successfully")
 	g, gCtx := errgroup.WithContext(ctx)
@@ -229,9 +270,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 			receiverStream, err := r.Connect.OpenUniStreamSync(gCtx)
 			if err != nil {
 				log.Error("failed to open receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId)...)
-				if err := processError(gCtx, uc, err, msgId); err != nil {
-					log.Error("failed to proccess error", logger.Err(err))
-				}
+
 				return err
 			}
 
@@ -239,9 +278,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 				log.Info("closing receiver's stream", receiverLogsData...)
 				if err := receiverStream.Close(); err != nil {
 					log.Error("failed to close receiver's stream", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-					if err := processError(gCtx, uc, err, msgId); err != nil {
-						log.Error("failed to proccess error", logger.Err(err))
-					}
+
 				} else {
 					log.Info("receiver's stream is closed successfully", receiverLogsData...)
 				}
@@ -249,10 +286,8 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 			log.Info("receiver's stream is opened", receiverLogsData...)
 			if _, err := receiverStream.Write(replyMsg); err != nil {
 				log.Error("failed to write message to receiver", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-				if err := processError(gCtx, uc, err, msgId); err != nil {
-					log.Error("failed to proccess error", logger.NewLogData(logger.Err(err), logReceiverId, logMsgId)...)
-					return err
-				}
+
+				return err
 			}
 			return nil
 		})
@@ -262,15 +297,9 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 			return cerr
 		}
 		log.Error("failed to send message to receivers", logger.NewLogData(logger.Err(err), logMsgId)...)
-		if perr := processError(ctx, uc, err, msgId); perr != nil {
-			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logMsgId)...)
-		}
 		return errs.NewAppError(op, err)
 	}
 	log.Info("message sended successfully", userLogsData...)
-	if err := writeSuccessMsg(ctx, uc.ctrlStream, msgId); err != nil {
-		log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
-	}
 
 	return nil
 }
@@ -289,14 +318,14 @@ func (ss *signalService) datagramProxing(ctx context.Context, uc *userConnection
 	datagramProxingData, err := protocols.ToDatagramProxingMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast datagram proxing message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(ctx, uc, err, msgId)
+		return errs.NewAppError(op, err)
 	}
 
 	log.Info("getting receivers connections", logUserData...)
 	receivers, err := ss.ConnectionRepo.GetConnects(ctx, datagramProxingData.RecevierIDs)
 	if err != nil {
 		log.Error("failed to get contacts", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-		return processError(ctx, uc, err, msgId)
+		return errs.NewAppError(op, err)
 	}
 	log.Info("receivers connections received successfully")
 	g, gCtx := errgroup.WithContext(ctx)
@@ -342,15 +371,9 @@ func (ss *signalService) datagramProxing(ctx context.Context, uc *userConnection
 			return cerr
 		}
 		log.Error("failed to send prox datagrams", logger.NewLogData(logger.Err(err), logUserId, logUserId)...)
-		if perr := processError(ctx, uc, err, "datagram"); perr != nil {
-			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
-		}
 		return errs.NewAppError(op, err)
 	}
 	log.Info("datagram proxing closing successfully", logUserData...)
-	if err := writeSuccessMsg(ctx, uc.ctrlStream, "datagram"); err != nil {
-		log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
-	}
 	return nil
 }
 
@@ -372,5 +395,34 @@ func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection
 		return errs.NewAppError(op, clerr)
 	}
 	log.Info("connection closed successfully", logUserId)
+	return nil
+}
+
+func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, msgId string) error {
+	var (
+		op          = "signalService.getOnfetchOnlineline"
+		log         = ss.Logger.AddOp(op)
+		logUserId   = logger.Attr("userId", uc.userId)
+		logMsgId    = logger.Attr("msgId", msgId)
+		logUserData = logger.NewLogData(logUserId, logMsgId)
+	)
+	log.Info("fetching all connects ids")
+	connectsIds, err := ss.ConnectionRepo.FetchAll(ctx)
+	if err != nil {
+		log.Error("failed to fetch all connects ids", logger.Err(err))
+		return errs.NewAppError(op, err)
+	}
+	payload := []byte(strings.Join(connectsIds, ","))
+
+	replyMsg, err := protocols.NewReplyMessage(uc.userId, payload)
+	if err != nil {
+		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return errs.NewAppError(op, err)
+	}
+	if err := writeMsg(ctx, uc.ctrlStream, replyMsg); err != nil {
+		log.Error("failed to write message to user", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return errs.NewAppError(op, err)
+	}
+	log.Info("all connects ids fetched successfully", logUserData...)
 	return nil
 }
