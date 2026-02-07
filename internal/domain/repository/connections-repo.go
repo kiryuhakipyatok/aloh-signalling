@@ -9,9 +9,9 @@ import (
 )
 
 type ConnectionsRepo interface {
-	AddConnect(ctx context.Context, user *models.User) error
+	AddConnect(ctx context.Context, user *models.Connection) error
 	DeleteConnect(ctx context.Context, id string) error
-	GetConnects(ctx context.Context, ids []string) ([]models.User, error)
+	GetConnects(ctx context.Context, ids []string) ([]models.Connection, error)
 	FetchAll(ctx context.Context) ([]string, error)
 }
 
@@ -23,7 +23,7 @@ func NewConnectionsRepo() ConnectionsRepo {
 	return &connectionsRepo{}
 }
 
-func (cr *connectionsRepo) AddConnect(ctx context.Context, user *models.User) error {
+func (cr *connectionsRepo) AddConnect(ctx context.Context, user *models.Connection) error {
 	op := "connectionsRepo.AddConnect"
 	select {
 	case <-ctx.Done():
@@ -49,9 +49,9 @@ func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id string) error {
 	}
 }
 
-func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]models.User, error) {
+func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]models.Connection, error) {
 	op := "connectionsRepo.GetConnects"
-	users := []models.User{}
+	users := []models.Connection{}
 	select {
 	case <-ctx.Done():
 		return nil, errs.ErrRequestTimeout(op)
@@ -61,7 +61,7 @@ func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]mod
 			if !ok {
 				return nil, errs.ErrNotFound(op)
 			}
-			user, ok := val.(models.User)
+			user, ok := val.(models.Connection)
 			if !ok {
 				return nil, errors.New("invalid value type")
 			}

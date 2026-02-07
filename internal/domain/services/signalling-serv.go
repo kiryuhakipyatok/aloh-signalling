@@ -101,7 +101,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return errs.NewAppError(op, err)
 	}
-	user := &models.User{
+	user := &models.Connection{
 		ID:      regMsg.ID,
 		Connect: conn,
 	}

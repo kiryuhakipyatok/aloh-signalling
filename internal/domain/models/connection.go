@@ -2,7 +2,7 @@ package models
 
 import "github.com/quic-go/quic-go"
 
-type User struct {
+type Connection struct {
 	ID      string
 	Connect *quic.Conn
 }
