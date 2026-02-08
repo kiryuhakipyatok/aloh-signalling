@@ -14,6 +14,7 @@ var (
 	ErrWrongMessageTypeBase = errors.New("wrong message type")
 	ErrInvalidJsonBase      = errors.New("invalid json")
 	ErrValidationBase       = errors.New("valdiation error")
+	ErrInvalidTypeBase      = errors.New("invalid type")
 )
 
 type AppError struct {
@@ -66,4 +67,8 @@ func ErrInvalidJson(op string, err error) AppError {
 
 func ErrValidation(op string, err error) AppError {
 	return AppError{Op: op, Err: fmt.Errorf("%w : %w", ErrValidationBase, err)}
+}
+
+func ErrInvalidType(op string) AppError {
+	return AppError{Op: op, Err: fmt.Errorf("%w", ErrInvalidTypeBase)}
 }

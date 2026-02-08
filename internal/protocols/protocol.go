@@ -13,10 +13,9 @@ type Message struct {
 	Data json.RawMessage `json:"data" validate:"required"`
 }
 
-type RegisterConnectMessage struct {
+type UserId struct {
 	ID string `json:"id" validate:"required,min=1"`
 }
-
 type SendPayloadMessage struct {
 	RecevierIDs []string        `json:"ids" validate:"required,min=1"`
 	Payload     json.RawMessage `json:"payload" validate:"required"`
@@ -31,16 +30,16 @@ type ReplyMessage struct {
 	Payload json.RawMessage `json:"payload" validate:"required"`
 }
 
-func ToRegisterConnectMessage(v *validator.Validator, data json.RawMessage) (*RegisterConnectMessage, error) {
-	op := "protocols.ToRegisterConnectMessage"
-	regMsg := &RegisterConnectMessage{}
-	if err := json.Unmarshal(data, regMsg); err != nil {
+func ToUserIdMessage(v *validator.Validator, data json.RawMessage) (*UserId, error) {
+	op := "protocols.ToUserIdMessage"
+	idMsg := &UserId{}
+	if err := json.Unmarshal(data, idMsg); err != nil {
 		return nil, errs.ErrInvalidJson(op, err)
 	}
-	if err := v.Validate.Struct(regMsg); err != nil {
+	if err := v.Validate.Struct(idMsg); err != nil {
 		return nil, errs.ErrValidation(op, err)
 	}
-	return regMsg, nil
+	return idMsg, nil
 }
 
 func ToSendPayloadMessage(v *validator.Validator, data json.RawMessage) (*SendPayloadMessage, error) {

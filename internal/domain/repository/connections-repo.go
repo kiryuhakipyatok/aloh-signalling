@@ -9,10 +9,11 @@ import (
 )
 
 type ConnectionsRepo interface {
-	AddConnect(ctx context.Context, user *models.Connection) error
+	AddConnect(ctx context.Context, connection *models.Connection) error
 	DeleteConnect(ctx context.Context, id string) error
 	GetConnects(ctx context.Context, ids []string) ([]models.Connection, error)
 	FetchAll(ctx context.Context) ([]string, error)
+	IsExists(ctx context.Context, id string) error
 }
 
 type connectionsRepo struct {
@@ -23,13 +24,13 @@ func NewConnectionsRepo() ConnectionsRepo {
 	return &connectionsRepo{}
 }
 
-func (cr *connectionsRepo) AddConnect(ctx context.Context, user *models.Connection) error {
+func (cr *connectionsRepo) AddConnect(ctx context.Context, connection *models.Connection) error {
 	op := "connectionsRepo.AddConnect"
 	select {
 	case <-ctx.Done():
 		return errs.ErrRequestTimeout(op)
 	default:
-		if _, ok := cr.LoadOrStore(user.ID, *user); ok {
+		if _, ok := cr.LoadOrStore(connection.ID, *connection); ok {
 			return errs.ErrAlreadyExists(op)
 		}
 		return nil
@@ -61,11 +62,11 @@ func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]mod
 			if !ok {
 				return nil, errs.ErrNotFound(op)
 			}
-			user, ok := val.(models.Connection)
+			connection, ok := val.(models.Connection)
 			if !ok {
 				return nil, errors.New("invalid value type")
 			}
-			users = append(users, user)
+			users = append(users, connection)
 		}
 		return users, nil
 	}
@@ -88,4 +89,17 @@ func (cr *connectionsRepo) FetchAll(ctx context.Context) ([]string, error) {
 		})
 	}
 	return ids, nil
+}
+
+func (cr *connectionsRepo) IsExists(ctx context.Context, id string) error {
+	op := "connectionsRepo.IsExists"
+	select {
+	case <-ctx.Done():
+		return errs.ErrRequestTimeout(op)
+	default:
+		if _, ok := cr.Load(id); !ok {
+			return errs.ErrNotFound(op)
+		}
+		return nil
+	}
 }
