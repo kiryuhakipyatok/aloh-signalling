@@ -150,6 +150,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 	}()
 	log.Info("user is registered", logUserData...)
+	log.Info("creds generating...", logUserData...)
 	username, password, err := ss.genCreds(ctx, session.UserId)
 	if err != nil {
 		log.Error("failed to generate credentials", logger.NewLogData(logMsgId, logger.Err(err))...)
@@ -158,6 +159,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return errs.NewAppError(op, err)
 	}
+	log.Info("creds generated", logUserData...)
 	creds := protocols.CredsMessage{
 		Username: username,
 		Password: password,
@@ -177,7 +179,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		log.Error("failed to write message to user", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
 		return errs.NewAppError(op, err)
 	}
-
+	log.Info("creds sended successfully", logUserData...)
 	userConnection.userId = user.ID
 	return ss.commandLoop(ctx, userConnection)
 }
