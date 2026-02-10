@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"test/internal/config"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
@@ -151,15 +150,18 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 	}()
 	log.Info("user is registered", logUserData...)
-	username,password,err:=ss.genCreds(ctx, session.UserId)
-	if err!=nil{
+	username, password, err := ss.genCreds(ctx, session.UserId)
+	if err != nil {
 		log.Error("failed to generate credentials", logger.NewLogData(logMsgId, logger.Err(err))...)
 		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
 			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
 		}
 		return errs.NewAppError(op, err)
 	}
-	creds:=fmt.Sprintf("%s %s", username, password)
+	creds := protocols.CredsMessage{
+		Username: username,
+		Password: password,
+	}
 	payload, err := json.Marshal(creds)
 	if err != nil {
 		log.Error("failed to marshal sessions", logger.Err(err))

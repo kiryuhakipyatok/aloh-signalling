@@ -25,6 +25,11 @@ type DatagramProxingMessage struct {
 	RecevierIDs []string `json:"ids" validate:"required,min=1"`
 }
 
+type CredsMessage struct {
+	Username string `json:"username" validate:"required,min=1"`
+	Password string `json:"password" validate:"required,min=1"`
+}
+
 type ReplyMessage struct {
 	Sender  string          `json:"sender-id" validate:"required,min=1"`
 	Payload json.RawMessage `json:"payload" validate:"required"`
