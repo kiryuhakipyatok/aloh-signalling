@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"test/internal/config"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
@@ -165,8 +164,6 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		Username: username,
 		Password: password,
 	}
-	fmt.Println(creds.Username)
-	fmt.Println(creds.Password)
 	payload, err := json.Marshal(creds)
 	if err != nil {
 		log.Error("failed to marshal sessions", logger.Err(err))
