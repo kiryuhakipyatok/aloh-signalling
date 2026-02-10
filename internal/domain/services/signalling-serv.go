@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"test/internal/config"
 	"test/internal/domain/models"
 	"test/internal/domain/repository"
 	"test/internal/protocols"
@@ -22,14 +24,16 @@ type signalService struct {
 	SessionRepo    repository.SessionsRepo
 	Logger         *logger.Logger
 	Validator      *validator.Validator
+	Cfg            config.Signaling
 }
 
-func NewSignallingService(cr repository.ConnectionsRepo, sr repository.SessionsRepo, v *validator.Validator, l *logger.Logger) SignallingService {
+func NewSignallingService(cr repository.ConnectionsRepo, cfg config.Signaling, sr repository.SessionsRepo, v *validator.Validator, l *logger.Logger) SignallingService {
 	return &signalService{
 		ConnectionRepo: cr,
 		SessionRepo:    sr,
 		Logger:         l,
 		Validator:      v,
+		Cfg:            cfg,
 	}
 }
 
@@ -147,10 +151,31 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 	}()
 	log.Info("user is registered", logUserData...)
-	if err := writeSuccessMsg(ctx, stream, msg.Id); err != nil {
-		log.Error("failed to write success message", logger.NewLogData(logMsgId, logger.Err(err))...)
+	username,password,err:=ss.genCreds(ctx, session.UserId)
+	if err!=nil{
+		log.Error("failed to generate credentials", logger.NewLogData(logMsgId, logger.Err(err))...)
+		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
+			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+		}
 		return errs.NewAppError(op, err)
 	}
+	creds:=fmt.Sprintf("%s %s", username, password)
+	payload, err := json.Marshal(creds)
+	if err != nil {
+		log.Error("failed to marshal sessions", logger.Err(err))
+		return errs.NewAppError(op, err)
+	}
+	replyMsg, err := protocols.PayloadSuccessMessage(msg.Id, payload)
+	if err != nil {
+		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return errs.NewAppError(op, err)
+	}
+
+	if err := writeMsg(ctx, userConnection.ctrlStream, replyMsg); err != nil {
+		log.Error("failed to write message to user", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return errs.NewAppError(op, err)
+	}
+
 	userConnection.userId = user.ID
 	return ss.commandLoop(ctx, userConnection)
 }

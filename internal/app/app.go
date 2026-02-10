@@ -22,7 +22,7 @@ func Run() {
 	connRepo := repository.NewConnectionsRepo()
 	sessRepo := repository.NewSessionsRepo()
 	logger.Info("repos are created")
-	signallingSerivice := services.NewSignallingService(connRepo, sessRepo, validator, logger)
+	signallingSerivice := services.NewSignallingService(connRepo, cfg.Signaling, sessRepo, validator, logger)
 	logger.Info("services are created")
 	serv := server.NewServer(cfg.Server, logger)
 	logger.Info("server is started")

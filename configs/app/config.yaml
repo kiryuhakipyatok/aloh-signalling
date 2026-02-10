@@ -15,4 +15,6 @@ server:
   nextProtos: ["aloh-proto"]
   maxIncomingStreams: 100
 
-  
+signaling:
+  secret: "${SECRET}"
+  credsTTL: 24h  

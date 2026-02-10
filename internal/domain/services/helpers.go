@@ -2,11 +2,16 @@ package services
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"test/internal/protocols"
 	"test/pkg/errs"
 	"test/pkg/logger"
+	"time"
 
 	"github.com/quic-go/quic-go"
 	"golang.org/x/sync/errgroup"
@@ -290,4 +295,20 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 	}
 	log.Info("sessions fetched successfully", logUserData...)
 	return nil
+}
+
+func (ss *signalService) genCreds(ctx context.Context, id string) (string, string, error) {
+	op := "utils.genCreds"
+	select {
+	case <-ctx.Done():
+		return "", "", errs.ErrRequestTimeout(op)
+	default:
+	}
+	exp := time.Now().Add(ss.Cfg.CredsTTL).Unix()
+	username := fmt.Sprintf("%d:%s", exp, id)
+	mac := hmac.New(func() hash.Hash { return sha1.New() }, []byte(ss.Cfg.Secret))
+	mac.Write([]byte(username))
+	hash := mac.Sum(nil)
+	password := base64.StdEncoding.EncodeToString(hash)
+	return username, password, nil
 }

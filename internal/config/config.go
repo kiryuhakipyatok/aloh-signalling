@@ -11,8 +11,9 @@ import (
 )
 
 type Config struct {
-	App    App    `mapstructure:"app"`
-	Server Server `mapstructure:"server"`
+	App       App       `mapstructure:"app"`
+	Server    Server    `mapstructure:"server"`
+	Signaling Signaling `mapstructure:"signaling"`
 }
 
 type App struct {
@@ -32,6 +33,11 @@ type Server struct {
 	NextProtos             []string      `mapstructure:"nextProtos"`
 	CertsPath              string        `mapstructure:"certsPath"`
 	MaxIncomingStreams     int64         `mapstructure:"maxIncomingStreams"`
+}
+
+type Signaling struct {
+	Secret   string        `mapstructure:"secret"`
+	CredsTTL time.Duration `mapstructure:"credsTTL"`
 }
 
 func NewConfig(path string) *Config {
