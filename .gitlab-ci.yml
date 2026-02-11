@@ -21,11 +21,7 @@ deploy-job:
     - cp "$QUIC_CERT_FILE" ./certs/server.crt
     - cp "$QUIC_KEY_FILE" ./certs/server.key
     - chmod 600 ./certs/server.key
-    - |
-      cat > .env << EOF
-      CONFIG_PATH=$CONFIG_PATH
-      SERVER_PORT=$SERVER_PORT
-      EOF
+    - cp $ENV_FILE .env
     - docker-compose rm -s -f aloh || true
     - docker-compose -f docker-compose.yaml up -d --force-recreate aloh
     - sleep 5
