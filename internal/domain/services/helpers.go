@@ -306,6 +306,7 @@ func (ss *signalService) genCreds(ctx context.Context, id string) (string, strin
 	}
 	exp := time.Now().Add(ss.Cfg.CredsTTL).Unix()
 	username := fmt.Sprintf("%d:%s", exp, id)
+	fmt.Println(ss.Cfg.Secret)
 	mac := hmac.New(func() hash.Hash { return sha1.New() }, []byte(ss.Cfg.Secret))
 	mac.Write([]byte(username))
 	hash := mac.Sum(nil)
