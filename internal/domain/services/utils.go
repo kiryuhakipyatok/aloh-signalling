@@ -16,11 +16,9 @@ func checkErr(ctx context.Context, err error) error {
 		return nil
 	}
 
-	var appErr *quic.ApplicationError
-	if errors.As(err, &appErr) {
-		if appErr.ErrorCode == 0 {
-			return nil
-		}
+	appErr, ok := errors.AsType[*quic.ApplicationError](err)
+	if ok && appErr.ErrorCode == 0 {
+		return nil
 	}
 
 	return err
