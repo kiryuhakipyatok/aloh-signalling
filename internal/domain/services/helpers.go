@@ -256,6 +256,36 @@ func (ss *signalService) addInSession(ctx context.Context, uc *userConnection, m
 	return nil
 }
 
+func (ss *signalService) deleteFromSession(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
+	var (
+		op          = "signalService.deleteFromSession"
+		log         = ss.Logger.AddOp(op)
+		logUserId   = logger.Attr("userId", uc.userId)
+		logMsgId    = logger.Attr("msgId", msg.Id)
+		logUserData = logger.NewLogData(logUserId, logMsgId)
+	)
+	log.Info("deleting user from session...", logUserData...)
+	userId, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
+	if err != nil {
+		log.Error("failed to cast delete from session message", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+		return errs.NewAppError(op, err)
+	}
+	if err := ss.ConnectionRepo.IsExists(ctx, userId.ID); err != nil {
+		return errs.NewAppError(op, err)
+	}
+
+	if err := ss.SessionRepo.DeleteFromSession(ctx, uc.userId, userId.ID); err != nil {
+		log.Error("failed to delete from session", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+		return errs.NewAppError(op, err)
+	}
+	if err := writeSuccessMsg(ctx, uc.ctrlStream, msg.Id); err != nil {
+		log.Error("failed to write success message to user", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
+		return errs.NewAppError(op, err)
+	}
+	log.Info("user deleted from session sussessfully")
+	return nil
+}
+
 func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
 	var (
 		op          = "signalService.fetchSessionsById"
@@ -266,7 +296,7 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 	)
 
 	log.Info("fetching sessions by id...", logUserData...)
-	fmt.Println(string(msg.Data))
+
 	userId, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast add session message", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)

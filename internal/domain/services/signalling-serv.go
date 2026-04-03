@@ -44,6 +44,7 @@ const (
 	GET_ONLINE_TYPE
 	ADD_IN_SESSION
 	GET_SESSIONS_BY_ID
+	DELETE_FROM_SESSION
 )
 
 type userConnection struct {
@@ -272,6 +273,25 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 				}
 			}()
 		case ADD_IN_SESSION:
+			go func() {
+				if err := ss.addInSession(ctx, uc, &msg); err != nil {
+					log.Error("failed to add user in session")
+					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+					}
+					return
+				}
+			}()
+		case DELETE_FROM_SESSION:
+			go func() {
+				if err := ss.deleteFromSession(ctx, uc, &msg); err != nil {
+					log.Error("failed to delete user from session")
+					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+					}
+					return
+				}
+			}()
 			go func() {
 				if err := ss.addInSession(ctx, uc, &msg); err != nil {
 					log.Error("failed to add user in session")
