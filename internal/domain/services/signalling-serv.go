@@ -253,13 +253,6 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 				}
 				return errs.NewAppError(op, err)
 			}
-			if err := ss.SessionRepo.DeleteSession(ctx, uc.userId); err != nil {
-				log.Error("failed to delete session", logUserId, logger.Err(err))
-				if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-					log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
-				}
-				return errs.NewAppError(op, err)
-			}
 			log.Info("user disconnected successfully", logUserId)
 			return nil
 		case GET_ONLINE_TYPE:
@@ -286,15 +279,6 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 			go func() {
 				if err := ss.deleteFromSession(ctx, uc, &msg); err != nil {
 					log.Error("failed to delete user from session")
-					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
-					}
-					return
-				}
-			}()
-			go func() {
-				if err := ss.addInSession(ctx, uc, &msg); err != nil {
-					log.Error("failed to add user in session")
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
 						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
 					}
