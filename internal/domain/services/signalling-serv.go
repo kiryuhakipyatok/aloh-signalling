@@ -114,12 +114,19 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	logUserId := logger.Attr("userID", user.ID)
 	logUserData := logger.NewLogData(logMsgId, logUserId)
-	if err := ss.ConnectionRepo.AddConnect(ctx, user); err != nil {
+	old, err := ss.ConnectionRepo.AddConnect(ctx, user)
+	if err != nil {
 		log.Error("failed to add connect", logger.NewLogData(logMsgId, logger.Err(err))...)
 		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
 			log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
 		}
 		return errs.NewAppError(op, err)
+	}
+	if old != nil {
+		log.Info("new connect with existing user id", logMsgId)
+		if err := old.Connect.CloseWithError(0, "new connect with existing user id"); err != nil {
+			log.Error("failed to close old connect", logger.Err(err))
+		}
 	}
 	session := &models.Session{
 		UserId:         idMsg.ID,
@@ -133,7 +140,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return errs.NewAppError(op, err)
 	}
 	defer func() {
-		if err := ss.ConnectionRepo.DeleteConnect(ctx, user.ID); err != nil {
+		if err := ss.ConnectionRepo.DeleteConnect(ctx, user.ID, user); err != nil {
 			log.Error("failed to delete connect", logUserId, logger.Err(err))
 			if err := processError(ctx, userConnection, err, ""); err != nil {
 				log.Error("failed to process error", logger.Err(err), logUserId)
@@ -196,6 +203,9 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 
 	for {
 		select {
+		case <-uc.quicConn.Context().Done():
+			log.Info("quic conn is done", logUserId)
+			return nil
 		case <-uc.ctrlStream.Context().Done():
 			log.Info("command stream is done", logUserId)
 			return nil
