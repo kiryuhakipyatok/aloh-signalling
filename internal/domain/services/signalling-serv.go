@@ -127,8 +127,11 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		if err := old.Connect.CloseWithError(0, "new connect with existing user id"); err != nil {
 			log.Error("failed to close old connect", logger.Err(err))
 		}
+		if err := ss.SessionRepo.DeleteSession(ctx, idMsg.ID); err != nil {
+			log.Error("failed to delete old session", logger.Err(err))
+		}
 	}
-	session := &models.Session{
+	session := models.Session{
 		UserId:         idMsg.ID,
 		ConnectedUsers: make(map[string]struct{}),
 	}
@@ -147,15 +150,16 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 			}
 		} else {
 			log.Info("connect is deleted successfully", logUserId)
-		}
-		if err := ss.SessionRepo.DeleteSession(ctx, user.ID); err != nil {
-			log.Error("failed to delete session", logUserId, logger.Err(err))
-			if err := processError(ctx, userConnection, err, ""); err != nil {
-				log.Error("failed to process error", logger.Err(err), logUserId)
+			if err := ss.SessionRepo.DeleteSession(ctx, user.ID); err != nil {
+				log.Error("failed to delete session", logUserId, logger.Err(err))
+				if err := processError(ctx, userConnection, err, ""); err != nil {
+					log.Error("failed to process error", logger.Err(err), logUserId)
+				}
+			} else {
+				log.Info("session is deleted successfully", logUserId)
 			}
-		} else {
-			log.Info("session is deleted successfully", logUserId)
 		}
+
 	}()
 	log.Info("user is registered", logUserData...)
 	log.Info("creds generating...", logUserData...)

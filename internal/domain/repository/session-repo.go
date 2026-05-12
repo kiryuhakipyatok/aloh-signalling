@@ -9,7 +9,7 @@ import (
 )
 
 type SessionsRepo interface {
-	NewSession(ctx context.Context, session *models.Session) error
+	NewSession(ctx context.Context, session models.Session) error
 	AddInSession(ctx context.Context, sessionId, userId string) error
 	DeleteSession(ctx context.Context, sessionId string) error
 	DeleteFromSession(ctx context.Context, sessionId, userId string) error
@@ -24,13 +24,13 @@ func NewSessionsRepo() SessionsRepo {
 	return &sessionRepo{}
 }
 
-func (sr *sessionRepo) NewSession(ctx context.Context, session *models.Session) error {
+func (sr *sessionRepo) NewSession(ctx context.Context, session models.Session) error {
 	op := "sessionRepo.NewSession"
 	select {
 	case <-ctx.Done():
 		return errs.ErrRequestTimeout(op)
 	default:
-		if _, ok := sr.LoadOrStore(session.UserId, *session); ok {
+		if _, ok := sr.LoadOrStore(session.UserId, session); ok {
 			return errs.ErrAlreadyExists(op)
 		}
 		return nil
