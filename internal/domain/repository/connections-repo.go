@@ -51,7 +51,7 @@ func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id string, conn *m
 	default:
 		deleted := cr.CompareAndDelete(id, conn)
 		if !deleted {
-			return nil
+			return errs.ErrNotFound(op)
 		}
 		return nil
 	}
