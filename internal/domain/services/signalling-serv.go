@@ -145,16 +145,10 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	defer func() {
 		if err := ss.ConnectionRepo.DeleteConnect(ctx, user.ID, user); err != nil {
 			log.Error("failed to delete connect", logUserId, logger.Err(err))
-			if err := processError(ctx, userConnection, err, ""); err != nil {
-				log.Error("failed to process error", logger.Err(err), logUserId)
-			}
 		} else {
 			log.Info("connect is deleted successfully", logUserId)
 			if err := ss.SessionRepo.DeleteSession(ctx, user.ID); err != nil {
 				log.Error("failed to delete session", logUserId, logger.Err(err))
-				if err := processError(ctx, userConnection, err, ""); err != nil {
-					log.Error("failed to process error", logger.Err(err), logUserId)
-				}
 			} else {
 				log.Info("session is deleted successfully", logUserId)
 			}
@@ -222,10 +216,10 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		if err := ss.processMsg(uc, &msg); err != nil {
 			if cerr := checkErr(ctx, err); cerr != nil {
 				log.Error("failed to process message", logger.Err(cerr), logUserId)
-				ss.closeConnection(ctx, uc, 1, "protocol violation")
+				//ss.closeConnection(ctx, uc, 1, "protocol violation")
 				return errs.NewAppError(op, err)
 			}
-			ss.closeConnection(ctx, uc, 0, "client done")
+			//ss.closeConnection(ctx, uc, 0, "client done")
 			return nil
 		}
 		logMsgId := logger.Attr("msgId", msg.Id)
@@ -312,7 +306,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 
 		default:
 			log.Error("invalid message type", logger.NewLogData(logger.Attr("msgType", msg.Type), logMsgId, logUserId)...)
-			processError(ctx, uc, errs.ErrWriteMsgBase, msg.Id)
+			return processError(ctx, uc, errs.ErrWriteMsgBase, msg.Id)
 		}
 	}
 
