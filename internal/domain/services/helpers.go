@@ -236,7 +236,7 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
-	log.Info("fetching online friends ids")
+	log.Info("fetching online friends ids", logUserData...)
 	friendsMsg, err := protocols.ToFetchFriendsOnlineMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast fetch online friends msg", logger.Err(err), logMsgId, logUserId)
