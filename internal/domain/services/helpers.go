@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"sync"
@@ -248,9 +249,14 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 	)
 	for _, fi := range friendsMsg.FriendsIds {
 		eg.Go(func() error {
+			logFr := logger.Attr("friendId", fi)
 			users, err := ss.SessionRepo.GetSessions(ctx, fi)
 			if err != nil {
-				log.Error("failed to get sessions", logger.Err(err), logger.Attr("friendId", fi), logMsgId, logUserId)
+				if errors.Is(err, errs.ErrNotFoundBase) {
+					log.Info("friend is offline or not exists", logFr)
+					return nil
+				}
+				log.Error("failed to get sessions", logger.Err(err), logFr, logMsgId, logUserId)
 				return errs.NewAppError(op, err)
 			}
 			mu.Lock()
