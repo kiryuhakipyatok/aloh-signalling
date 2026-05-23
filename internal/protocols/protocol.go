@@ -25,6 +25,10 @@ type DatagramProxingMessage struct {
 	RecevierIDs []string `json:"ids" validate:"required,min=1"`
 }
 
+type FetchFriendsOnline struct {
+	FriendsIds []string `json:"friendsIds" validate:"required,min=1"`
+}
+
 type CredsMessage struct {
 	Username string `json:"username" validate:"required,min=1"`
 	Password string `json:"password" validate:"required,min=1"`
@@ -82,4 +86,16 @@ func ToDatagramProxingMessage(v *validator.Validator, data json.RawMessage) (*Da
 		return nil, errs.ErrValidation(op, err)
 	}
 	return datagramMsg, nil
+}
+
+func ToFetchFriendsOnlineMessage(v *validator.Validator, data json.RawMessage) (*FetchFriendsOnline, error) {
+	op := "protocols.ToFetchFriendsOnlineMessage"
+	friendsMsg := &FetchFriendsOnline{}
+	if err := json.Unmarshal(data, friendsMsg); err != nil {
+		return nil, errs.ErrInvalidJson(op, err)
+	}
+	if err := v.Validate.Struct(friendsMsg); err != nil {
+		return nil, errs.ErrValidation(op, err)
+	}
+	return friendsMsg, nil
 }

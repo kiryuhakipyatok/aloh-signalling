@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
+	"sync"
 	"test/internal/protocols"
 	"test/pkg/errs"
 	"test/pkg/logger"
@@ -223,6 +224,63 @@ func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, ms
 		return errs.NewAppError(op, err)
 	}
 	log.Info("all connects ids fetched successfully", logUserData...)
+	return nil
+}
+
+func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
+	var (
+		op          = "signalService.fetchOnline"
+		log         = ss.Logger.AddOp(op)
+		logUserId   = logger.Attr("userId", uc.userId)
+		logMsgId    = logger.Attr("msgId", msg.Id)
+		logUserData = logger.NewLogData(logUserId, logMsgId)
+	)
+	log.Info("fetching online friends ids")
+	friendsMsg, err := protocols.ToFetchFriendsOnlineMessage(ss.Validator, msg.Data)
+	if err != nil {
+		log.Error("failed to cast fetch online friends msg", logger.Err(err), logMsgId, logUserId)
+		return errs.NewAppError(op, err)
+	}
+	friendsOnline := make(map[string][]string)
+	var (
+		eg errgroup.Group
+		mu sync.Mutex
+	)
+	for _, fi := range friendsMsg.FriendsIds {
+		eg.Go(func() error {
+			users, err := ss.SessionRepo.GetSessions(ctx, fi)
+			if err != nil {
+				log.Error("failed to get sessions", logger.Err(err), logger.Attr("friendId", fi), logMsgId, logUserId)
+				return errs.NewAppError(op, err)
+			}
+			mu.Lock()
+			friendsOnline[fi] = users
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		log.Error("failed to fetch online friends", logger.Err(err), logMsgId, logUserId)
+		return errs.NewAppError(op, err)
+	}
+
+	payload, err := json.Marshal(friendsOnline)
+	if err != nil {
+		log.Error("failed to marshal online friends", logger.Err(err))
+		return errs.NewAppError(op, err)
+	}
+
+	replyMsg, err := protocols.PayloadSuccessMessage(msg.Id, payload)
+	if err != nil {
+		log.Error("failed to cast reply message", logger.Err(err), logUserId, logMsgId)
+		return errs.NewAppError(op, err)
+	}
+
+	if err := writeMsg(ctx, uc.ctrlStream, replyMsg); err != nil {
+		log.Error("failed to write message to user", logger.Err(err), logUserId, logMsgId)
+		return errs.NewAppError(op, err)
+	}
+	log.Info("online friends fetched successfully", logUserData...)
 	return nil
 }
 

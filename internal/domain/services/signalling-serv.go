@@ -45,6 +45,7 @@ const (
 	ADD_IN_SESSION
 	GET_SESSIONS_BY_ID
 	DELETE_FROM_SESSION
+	GET_ONLINE_FRIENDS
 )
 
 type userConnection struct {
@@ -227,37 +228,37 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		case DATAGRAM_TYPE:
 			go func() {
 				if err := ss.datagramProxing(ctx, uc, &msg); err != nil {
-					log.Error("failed to datagram proxing", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+					log.Error("failed to datagram proxing", logger.Err(err), logMsgId, logUserId)
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 					}
 					return
 				}
 				if err := writeSuccessMsg(ctx, uc.ctrlStream, msg.Id); err != nil {
-					log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
+					log.Error("failed to write success message", logger.Err(err), logMsgId)
 					return
 				}
 			}()
 		case STREAM_TYPE:
 			go func() {
 				if err := ss.sendMsg(ctx, uc, &msg); err != nil {
-					log.Error("message sending is failed", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
+					log.Error("message sending is failed", logger.Err(err), logMsgId, logUserId)
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 					}
 					return
 				}
 				if err := writeSuccessMsg(ctx, uc.ctrlStream, msg.Id); err != nil {
-					log.Error("failed to write success message", logger.NewLogData(logger.Err(err), logMsgId)...)
+					log.Error("failed to write success message", logger.Err(err), logMsgId)
 					return
 				}
 			}()
 		case DISCONN_TYPE:
 			log.Info("user disconnecting...", logUserId)
 			if err := ss.closeConnection(ctx, uc, 0, "user disconnected"); err != nil {
-				log.Error("failed to close conenction", logUserId, logger.Err(err))
+				log.Error("failed to close conenction", logger.Err(err), logMsgId, logUserId)
 				if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-					log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+					log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 				}
 				return errs.NewAppError(op, err)
 			}
@@ -266,9 +267,9 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		case GET_ONLINE_TYPE:
 			go func() {
 				if err := ss.fetchOnline(ctx, uc, msg.Id); err != nil {
-					log.Error("failed to fetch online connects")
+					log.Error("failed to fetch online connects", logger.Err(err), logMsgId, logUserId)
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 					}
 					return
 				}
@@ -276,9 +277,9 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		case ADD_IN_SESSION:
 			go func() {
 				if err := ss.addInSession(ctx, uc, &msg); err != nil {
-					log.Error("failed to add user in session")
+					log.Error("failed to add user in session", logger.Err(err), logMsgId, logUserId)
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 					}
 					return
 				}
@@ -286,9 +287,9 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		case DELETE_FROM_SESSION:
 			go func() {
 				if err := ss.deleteFromSession(ctx, uc, &msg); err != nil {
-					log.Error("failed to delete user from session")
+					log.Error("failed to delete user from session", logger.Err(err), logMsgId, logUserId)
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 					}
 					return
 				}
@@ -296,9 +297,19 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		case GET_SESSIONS_BY_ID:
 			go func() {
 				if err := ss.fetchSessionsById(ctx, uc, &msg); err != nil {
-					log.Error("failed to fetch sessions by id")
+					log.Error("failed to fetch sessions by id", logger.Err(err), logMsgId, logUserId)
 					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
-						log.Error("failed to proccess error", logger.NewLogData(logger.Err(perr), logUserId, logUserId)...)
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
+					}
+					return
+				}
+			}()
+		case GET_ONLINE_FRIENDS:
+			go func() {
+				if err := ss.fetchOnlineFriends(ctx, uc, &msg); err != nil {
+					log.Error("failed to fetch online friends", logger.Err(err), logMsgId, logUserId)
+					if perr := processError(ctx, uc, err, msg.Id); perr != nil {
+						log.Error("failed to proccess error", logger.Err(perr), logUserId, logUserId)
 					}
 					return
 				}
