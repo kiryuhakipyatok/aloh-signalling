@@ -242,7 +242,7 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 		log.Error("failed to cast fetch online friends msg", logger.Err(err), logMsgId, logUserId)
 		return errs.NewAppError(op, err)
 	}
-	friendsOnline := make(map[string][]string)
+	friendsOnline := make(map[string][]string, len(friendsMsg.FriendsIds))
 	var (
 		eg errgroup.Group
 		mu sync.Mutex
