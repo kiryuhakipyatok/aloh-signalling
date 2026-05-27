@@ -7,7 +7,7 @@ server:
   host: "localhost"
   port: "${SERVER_PORT}"
   handshakeTimeout: 10s
-  idleTimeout: 10m
+  idleTimeout: 60s
   keepAlivePeriodTimeout: 10s
   closeTimeout: 10s
   startTimeout: 10s
