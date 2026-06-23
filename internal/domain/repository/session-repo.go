@@ -10,7 +10,7 @@ import (
 
 type SessionsRepo interface {
 	NewSession(ctx context.Context, session models.Session) error
-	AddInSession(ctx context.Context, sessionId, userId string) error
+	AddInSession(ctx context.Context, sessionId string, user models.UserData) error
 	DeleteSession(ctx context.Context, sessionId string) error
 	DeleteFromSession(ctx context.Context, sessionId, userId string) error
 	GetSessions(ctx context.Context, sessionId string) ([]string, error)
@@ -37,7 +37,7 @@ func (sr *sessionRepo) NewSession(ctx context.Context, session models.Session) e
 	}
 }
 
-func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId, userId string) error {
+func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId string, user models.UserData) error {
 	op := "sessionRepo.AddInSession"
 	select {
 	case <-ctx.Done():
@@ -51,7 +51,7 @@ func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId, userId strin
 		if !ok {
 			return errors.New("invalid value type")
 		}
-		session.ConnectedUsers[userId] = struct{}{}
+		session.ConnectedUsers[user.ID] = user
 		return nil
 	}
 }

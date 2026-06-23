@@ -49,7 +49,7 @@ const (
 )
 
 type userConnection struct {
-	userId     string
+	userData   models.UserData
 	quicConn   *quic.Conn
 	ctrlStream *quic.Stream
 	decoder    *json.Decoder
@@ -101,7 +101,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return errs.NewAppError(op, err)
 	}
-	idMsg, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
+	userData, err := protocols.ToUserDataMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast message", logger.NewLogData(logger.Err(err), logMsgId)...)
 		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
@@ -109,8 +109,9 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return errs.NewAppError(op, err)
 	}
+	userId := userData.Data.ID
 	user := &models.Connection{
-		ID:      idMsg.ID,
+		ID:      userId,
 		Connect: conn,
 	}
 	logUserId := logger.Attr("userID", user.ID)
@@ -128,13 +129,13 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		if err := old.Connect.CloseWithError(0, "new connect with existing user id"); err != nil {
 			log.Error("failed to close old connect", logger.Err(err))
 		}
-		if err := ss.SessionRepo.DeleteSession(ctx, idMsg.ID); err != nil {
+		if err := ss.SessionRepo.DeleteSession(ctx, userId); err != nil {
 			log.Error("failed to delete old session", logger.Err(err))
 		}
 	}
 	session := models.Session{
-		UserId:         idMsg.ID,
-		ConnectedUsers: make(map[string]struct{}),
+		UserId:         userId,
+		ConnectedUsers: make(map[string]models.UserData, 3),
 	}
 	if err := ss.SessionRepo.NewSession(ctx, session); err != nil {
 		log.Error("failed to create new session", logger.NewLogData(logMsgId, logger.Err(err))...)
@@ -187,7 +188,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return errs.NewAppError(op, err)
 	}
 	log.Info("creds sended successfully", logUserData...)
-	userConnection.userId = user.ID
+	userConnection.userData.ID = user.ID
 	return ss.commandLoop(ctx, userConnection)
 }
 
@@ -195,7 +196,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 	var (
 		op        = "signalService.commandLoop"
 		log       = ss.Logger.AddOp(op)
-		logUserId = logger.Attr("userID", uc.userId)
+		logUserId = logger.Attr("userID", uc.userData.ID)
 	)
 
 	log.Info("serving connection in command loop...", logUserId)
