@@ -36,8 +36,8 @@ type CredsMessage struct {
 }
 
 type ReplyMessage struct {
-	Sender  string          `json:"sender-id" validate:"required,min=1"`
-	Payload json.RawMessage `json:"payload" validate:"required"`
+	Sender  string `json:"sender-id" validate:"required,min=1"`
+	Payload []byte `json:"payload" validate:"required"`
 }
 
 func ToUserIdMessage(v *validator.Validator, data json.RawMessage) (*UserId, error) {
