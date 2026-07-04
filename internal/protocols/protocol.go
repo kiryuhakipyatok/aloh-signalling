@@ -2,6 +2,7 @@ package protocols
 
 import (
 	"encoding/json"
+
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/validator"
@@ -17,8 +18,8 @@ type UserId struct {
 	ID string `json:"id" validate:"required,min=1"`
 }
 type SendPayloadMessage struct {
-	RecevierIDs []string        `json:"ids" validate:"required,min=1"`
-	Payload     json.RawMessage `json:"payload" validate:"required"`
+	RecevierIDs []string `json:"ids" validate:"required,min=1"`
+	Payload     []byte   `json:"payload" validate:"required"`
 }
 
 type DatagramProxingMessage struct {
