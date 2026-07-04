@@ -9,4 +9,5 @@ type (
 	DatagramProxingMessage = protocols.DatagramProxingMessage
 	CredsMessage           = protocols.CredsMessage
 	ReplyMessage           = protocols.ReplyMessage
+	ResponseMessage        = protocols.ResponseMessage
 )

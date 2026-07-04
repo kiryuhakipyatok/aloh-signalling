@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/config"
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/models"
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/repository"
@@ -35,18 +36,6 @@ func NewSignallingService(cr repository.ConnectionsRepo, cfg config.Signaling, s
 		Cfg:            cfg,
 	}
 }
-
-const (
-	REG_TYPE = iota
-	STREAM_TYPE
-	DATAGRAM_TYPE
-	DISCONN_TYPE
-	GET_ONLINE_TYPE
-	ADD_IN_SESSION
-	GET_SESSIONS_BY_ID
-	DELETE_FROM_SESSION
-	GET_ONLINE_FRIENDS
-)
 
 type userConnection struct {
 	userId     string
@@ -93,7 +82,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 
 	logMsgId := logger.Attr("msgId", msg.Id)
 
-	if *msg.Type != REG_TYPE {
+	if *msg.Type != protocols.REG_TYPE {
 		msgIdLog := logger.Attr("msgType", msg.Type)
 		log.Error("wrong message type", logger.NewLogData(msgIdLog, logMsgId)...)
 		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
@@ -225,7 +214,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 		}
 		logMsgId := logger.Attr("msgId", msg.Id)
 		switch *msg.Type {
-		case DATAGRAM_TYPE:
+		case protocols.DATAGRAM_TYPE:
 			go func() {
 				if err := ss.datagramProxing(ctx, uc, &msg); err != nil {
 					log.Error("failed to datagram proxing", logger.Err(err), logMsgId, logUserId)
@@ -239,7 +228,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 					return
 				}
 			}()
-		case STREAM_TYPE:
+		case protocols.STREAM_TYPE:
 			go func() {
 				if err := ss.sendMsg(ctx, uc, &msg); err != nil {
 					log.Error("message sending is failed", logger.Err(err), logMsgId, logUserId)
@@ -253,7 +242,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 					return
 				}
 			}()
-		case DISCONN_TYPE:
+		case protocols.DISCONN_TYPE:
 			log.Info("user disconnecting...", logUserId)
 			if err := ss.closeConnection(ctx, uc, 0, "user disconnected"); err != nil {
 				log.Error("failed to close conenction", logger.Err(err), logMsgId, logUserId)
@@ -264,7 +253,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 			}
 			log.Info("user disconnected successfully", logUserId)
 			return nil
-		case GET_ONLINE_TYPE:
+		case protocols.GET_ONLINE_TYPE:
 			go func() {
 				if err := ss.fetchOnline(ctx, uc, msg.Id); err != nil {
 					log.Error("failed to fetch online connects", logger.Err(err), logMsgId, logUserId)
@@ -274,7 +263,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 					return
 				}
 			}()
-		case ADD_IN_SESSION:
+		case protocols.ADD_IN_SESSION:
 			go func() {
 				if err := ss.addInSession(ctx, uc, &msg); err != nil {
 					log.Error("failed to add user in session", logger.Err(err), logMsgId, logUserId)
@@ -284,7 +273,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 					return
 				}
 			}()
-		case DELETE_FROM_SESSION:
+		case protocols.DELETE_FROM_SESSION:
 			go func() {
 				if err := ss.deleteFromSession(ctx, uc, &msg); err != nil {
 					log.Error("failed to delete user from session", logger.Err(err), logMsgId, logUserId)
@@ -294,7 +283,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 					return
 				}
 			}()
-		case GET_SESSIONS_BY_ID:
+		case protocols.GET_SESSIONS_BY_ID:
 			go func() {
 				if err := ss.fetchSessionsById(ctx, uc, &msg); err != nil {
 					log.Error("failed to fetch sessions by id", logger.Err(err), logMsgId, logUserId)
@@ -304,7 +293,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 					return
 				}
 			}()
-		case GET_ONLINE_FRIENDS:
+		case protocols.GET_ONLINE_FRIENDS:
 			go func() {
 				if err := ss.fetchOnlineFriends(ctx, uc, &msg); err != nil {
 					log.Error("failed to fetch online friends", logger.Err(err), logMsgId, logUserId)
