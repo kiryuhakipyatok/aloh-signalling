@@ -3,7 +3,7 @@ package protocols
 import (
 	"encoding/json"
 	"fmt"
-	"test/pkg/errs"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 )
 
 const (

@@ -1,4 +1,4 @@
-module test
+module github.com/kiryuhakipyatok/aloh-signalling
 
 go 1.26
 

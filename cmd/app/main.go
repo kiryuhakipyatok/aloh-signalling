@@ -1,7 +1,7 @@
 package main
 
 import (
-	"test/internal/app"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/app"
 )
 
 func main() {

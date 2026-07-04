@@ -5,12 +5,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"test/internal/config"
-	"test/internal/domain/repository"
-	"test/internal/domain/services"
-	"test/internal/server"
-	"test/pkg/logger"
-	"test/pkg/validator"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/config"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/repository"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/services"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/server"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/logger"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/validator"
 )
 
 func Run() {

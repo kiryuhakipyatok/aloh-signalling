@@ -3,13 +3,13 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"test/internal/config"
-	"test/internal/domain/models"
-	"test/internal/domain/repository"
-	"test/internal/protocols"
-	"test/pkg/errs"
-	"test/pkg/logger"
-	"test/pkg/validator"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/config"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/models"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/repository"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/protocols"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/logger"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/validator"
 
 	"github.com/quic-go/quic-go"
 )

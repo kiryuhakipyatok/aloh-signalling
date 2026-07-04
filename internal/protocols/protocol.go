@@ -2,9 +2,9 @@ package protocols
 
 import (
 	"encoding/json"
-	"test/pkg/errs"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 
-	"test/pkg/validator"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/validator"
 )
 
 type Message struct {

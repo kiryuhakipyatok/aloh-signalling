@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"test/internal/domain/models"
-	"test/pkg/errs"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/models"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 )
 
 type ConnectionsRepo interface {

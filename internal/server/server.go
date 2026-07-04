@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"test/internal/config"
-	"test/pkg/logger"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/config"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/logger"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
