@@ -10,4 +10,5 @@ type (
 	CredsMessage           = protocols.CredsMessage
 	ReplyMessage           = protocols.ReplyMessage
 	ResponseMessage        = protocols.ResponseMessage
+	FetchFriendsOnline     = protocols.FetchFriendsOnline
 )
