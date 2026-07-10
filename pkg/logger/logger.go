@@ -3,7 +3,7 @@ package logger
 import (
 	"log/slog"
 	"os"
-	"test/internal/config"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/config"
 )
 
 type Logger struct {

@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"hash"
 	"sync"
-	"test/internal/protocols"
-	"test/pkg/errs"
-	"test/pkg/logger"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/protocols"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/logger"
 	"time"
 
 	"github.com/google/uuid"

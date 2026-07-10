@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"test/internal/protocols"
-	"test/pkg/errs"
+	"github.com/kiryuhakipyatok/aloh-signalling/internal/protocols"
+	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
