@@ -1,8 +1,11 @@
 package models
 
-import "github.com/quic-go/quic-go"
+import (
+	"github.com/google/uuid"
+	"github.com/quic-go/quic-go"
+)
 
 type Connection struct {
-	ID      string
+	ID      uuid.UUID
 	Connect *quic.Conn
 }

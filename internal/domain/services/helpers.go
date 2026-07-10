@@ -15,6 +15,7 @@ import (
 	"test/pkg/logger"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -194,7 +195,7 @@ func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection
 	return nil
 }
 
-func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, msgId string) error {
+func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, msgId uuid.UUID) error {
 	var (
 		op          = "signalService.fetchOnline"
 		log         = ss.Logger.AddOp(op)
@@ -242,7 +243,7 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 		log.Error("failed to cast fetch online friends msg", logger.Err(err), logMsgId, logUserId)
 		return errs.NewAppError(op, err)
 	}
-	friendsOnline := make(map[string][]string, len(friendsMsg.FriendsIds))
+	friendsOnline := make(map[uuid.UUID][]uuid.UUID, len(friendsMsg.FriendsIds))
 	var (
 		eg errgroup.Group
 		mu sync.Mutex
@@ -394,7 +395,7 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 	return nil
 }
 
-func (ss *signalService) genCreds(ctx context.Context, id string) (string, string, error) {
+func (ss *signalService) genCreds(ctx context.Context, id uuid.UUID) (string, string, error) {
 	op := "utils.genCreds"
 	select {
 	case <-ctx.Done():
@@ -402,7 +403,7 @@ func (ss *signalService) genCreds(ctx context.Context, id string) (string, strin
 	default:
 	}
 	exp := time.Now().Add(ss.Cfg.CredsTTL).Unix()
-	username := fmt.Sprintf("%d:%s", exp, id)
+	username := fmt.Sprintf("%d:%s", exp, id.String())
 	fmt.Println(ss.Cfg.Secret)
 	mac := hmac.New(func() hash.Hash { return sha1.New() }, []byte(ss.Cfg.Secret))
 	mac.Write([]byte(username))

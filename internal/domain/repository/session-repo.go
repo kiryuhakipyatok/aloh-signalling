@@ -6,14 +6,16 @@ import (
 	"sync"
 	"test/internal/domain/models"
 	"test/pkg/errs"
+
+	"github.com/google/uuid"
 )
 
 type SessionsRepo interface {
 	NewSession(ctx context.Context, session models.Session) error
-	AddInSession(ctx context.Context, sessionId string, user models.UserData) error
-	DeleteSession(ctx context.Context, sessionId string) error
-	DeleteFromSession(ctx context.Context, sessionId, userId string) error
-	GetSessions(ctx context.Context, sessionId string) ([]string, error)
+	AddInSession(ctx context.Context, sessionId uuid.UUID, user models.UserData) error
+	DeleteSession(ctx context.Context, sessionId uuid.UUID) error
+	DeleteFromSession(ctx context.Context, sessionId, userId uuid.UUID) error
+	GetSessions(ctx context.Context, sessionId uuid.UUID) ([]uuid.UUID, error)
 }
 
 type sessionRepo struct {
@@ -37,7 +39,7 @@ func (sr *sessionRepo) NewSession(ctx context.Context, session models.Session) e
 	}
 }
 
-func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId string, user models.UserData) error {
+func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId uuid.UUID, user models.UserData) error {
 	op := "sessionRepo.AddInSession"
 	select {
 	case <-ctx.Done():
@@ -56,7 +58,7 @@ func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId string, user 
 	}
 }
 
-func (cr *sessionRepo) DeleteSession(ctx context.Context, sessionId string) error {
+func (cr *sessionRepo) DeleteSession(ctx context.Context, sessionId uuid.UUID) error {
 	op := "connectionsRepo.DeleteSession"
 	select {
 	case <-ctx.Done():
@@ -75,7 +77,7 @@ func (cr *sessionRepo) DeleteSession(ctx context.Context, sessionId string) erro
 	}
 }
 
-func (sr *sessionRepo) DeleteFromSession(ctx context.Context, sessionId, userId string) error {
+func (sr *sessionRepo) DeleteFromSession(ctx context.Context, sessionId, userId uuid.UUID) error {
 	op := "sessionRepo.AddInSession"
 	select {
 	case <-ctx.Done():
@@ -94,13 +96,13 @@ func (sr *sessionRepo) DeleteFromSession(ctx context.Context, sessionId, userId 
 	}
 }
 
-func (sr *sessionRepo) GetSessions(ctx context.Context, sessionId string) ([]string, error) {
+func (sr *sessionRepo) GetSessions(ctx context.Context, sessionId uuid.UUID) ([]uuid.UUID, error) {
 	op := "sessionRepo.GetSessions"
 	select {
 	case <-ctx.Done():
 		return nil, errs.ErrRequestTimeout(op)
 	default:
-		connectedUsers := []string{}
+		connectedUsers := []uuid.UUID{}
 		val, ok := sr.Load(sessionId)
 		if !ok {
 			return nil, errs.ErrNotFound(op)

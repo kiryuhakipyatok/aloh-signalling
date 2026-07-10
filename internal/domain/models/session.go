@@ -1,6 +1,8 @@
 package models
 
+import "github.com/google/uuid"
+
 type Session struct {
-	UserId         string
-	ConnectedUsers map[string]UserData
+	UserId         uuid.UUID
+	ConnectedUsers map[uuid.UUID]UserData
 }

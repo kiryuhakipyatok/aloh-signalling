@@ -11,6 +11,7 @@ import (
 	"test/pkg/logger"
 	"test/pkg/validator"
 
+	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 )
 
@@ -135,7 +136,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	session := models.Session{
 		UserId:         userId,
-		ConnectedUsers: make(map[string]models.UserData, 3),
+		ConnectedUsers: make(map[uuid.UUID]models.UserData, 3),
 	}
 	if err := ss.SessionRepo.NewSession(ctx, session); err != nil {
 		log.Error("failed to create new session", logger.NewLogData(logMsgId, logger.Err(err))...)

@@ -6,25 +6,27 @@ import (
 	"test/pkg/errs"
 
 	"test/pkg/validator"
+
+	"github.com/google/uuid"
 )
 
 type Message struct {
-	Id   string          `json:"id" validate:"required,uuid"`
+	Id   uuid.UUID       `json:"id" validate:"required,uuid"`
 	Type *uint8          `json:"type" validate:"required"`
 	Data json.RawMessage `json:"data" validate:"required"`
 }
 
 type SendPayloadMessage struct {
-	RecevierIDs []string        `json:"ids" validate:"required,min=1"`
+	RecevierIDs []uuid.UUID        `json:"ids" validate:"required,min=1"`
 	Payload     json.RawMessage `json:"payload" validate:"required"`
 }
 
 type DatagramProxingMessage struct {
-	RecevierIDs []string `json:"ids" validate:"required,min=1"`
+	RecevierIDs []uuid.UUID `json:"ids" validate:"required,min=1"`
 }
 
 type UserId struct {
-	ID string `json:"id" validate:"required,uuid"`
+	ID uuid.UUID `json:"id" validate:"required,uuid"`
 }
 
 type UserData struct {
@@ -32,7 +34,7 @@ type UserData struct {
 }
 
 type FetchFriendsOnline struct {
-	FriendsIds []string `json:"friendsIds" validate:"required,min=1"`
+	FriendsIds []uuid.UUID `json:"friendsIds" validate:"required,min=1"`
 }
 
 type CredsMessage struct {
