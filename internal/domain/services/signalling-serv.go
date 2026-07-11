@@ -186,7 +186,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 	var (
 		op        = "signalService.commandLoop"
 		log       = ss.Logger.AddOp(op)
-		logUserId = logger.Attr("userID", uc.userId.ID)
+		logUserId = logger.Attr("userID", uc.userId)
 	)
 
 	log.Info("serving connection in command loop...", logUserId)
