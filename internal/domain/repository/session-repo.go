@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
+
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/models"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 
@@ -12,7 +14,7 @@ import (
 
 type SessionsRepo interface {
 	NewSession(ctx context.Context, session models.Session) error
-	AddInSession(ctx context.Context, sessionId uuid.UUID, user models.UserData) error
+	AddInSession(ctx context.Context, sessionId, userId uuid.UUID) error
 	DeleteSession(ctx context.Context, sessionId uuid.UUID) error
 	DeleteFromSession(ctx context.Context, sessionId, userId uuid.UUID) error
 	GetSessions(ctx context.Context, sessionId uuid.UUID) ([]uuid.UUID, error)
@@ -39,7 +41,7 @@ func (sr *sessionRepo) NewSession(ctx context.Context, session models.Session) e
 	}
 }
 
-func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId uuid.UUID, user models.UserData) error {
+func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId, userId uuid.UUID) error {
 	op := "sessionRepo.AddInSession"
 	select {
 	case <-ctx.Done():
@@ -53,7 +55,7 @@ func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId uuid.UUID, us
 		if !ok {
 			return errors.New("invalid value type")
 		}
-		session.ConnectedUsers[user.ID] = user
+		session.ConnectedUsers = append(session.ConnectedUsers, userId)
 		return nil
 	}
 }
@@ -70,7 +72,7 @@ func (cr *sessionRepo) DeleteSession(ctx context.Context, sessionId uuid.UUID) e
 			if !ok {
 				return false
 			}
-			delete(session.ConnectedUsers, sessionId)
+			session.ConnectedUsers = deleteFromSessionConns(session.ConnectedUsers, sessionId)
 			return true
 		})
 		return nil
@@ -91,7 +93,7 @@ func (sr *sessionRepo) DeleteFromSession(ctx context.Context, sessionId, userId 
 		if !ok {
 			return errors.New("invalid value type")
 		}
-		delete(session.ConnectedUsers, userId)
+		session.ConnectedUsers = deleteFromSessionConns(session.ConnectedUsers, userId)
 		return nil
 	}
 }
@@ -112,10 +114,16 @@ func (sr *sessionRepo) GetSessions(ctx context.Context, sessionId uuid.UUID) ([]
 			return nil, errs.ErrInvalidType(op)
 		}
 
-		for id := range session.ConnectedUsers {
+		for _, id := range session.ConnectedUsers {
 			connectedUsers = append(connectedUsers, id)
 		}
 
 		return connectedUsers, nil
 	}
+}
+
+func deleteFromSessionConns(conns []uuid.UUID, user uuid.UUID) []uuid.UUID {
+	return slices.DeleteFunc(conns, func(u uuid.UUID) bool {
+		return u == user
+	})
 }

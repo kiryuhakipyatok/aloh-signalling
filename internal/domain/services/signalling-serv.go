@@ -39,7 +39,7 @@ func NewSignallingService(cr repository.ConnectionsRepo, cfg config.Signaling, s
 }
 
 type userConnection struct {
-	userData   models.UserData
+	userId     uuid.UUID
 	quicConn   *quic.Conn
 	ctrlStream *quic.Stream
 	decoder    *json.Decoder
@@ -91,7 +91,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return errs.NewAppError(op, err)
 	}
-	userData, err := protocols.ToUserDataMessage(ss.Validator, msg.Data)
+	userIdData, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast message", logger.NewLogData(logger.Err(err), logMsgId)...)
 		if perr := processError(ctx, userConnection, err, msg.Id); perr != nil {
@@ -99,7 +99,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		}
 		return errs.NewAppError(op, err)
 	}
-	userId := userData.Data.ID
+	userId := userIdData.ID
 	user := &models.Connection{
 		ID:      userId,
 		Connect: conn,
@@ -125,7 +125,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 	}
 	session := models.Session{
 		UserId:         userId,
-		ConnectedUsers: make(map[uuid.UUID]models.UserData, 3),
+		ConnectedUsers: make([]uuid.UUID, 0, 3),
 	}
 	if err := ss.SessionRepo.NewSession(ctx, session); err != nil {
 		log.Error("failed to create new session", logger.NewLogData(logMsgId, logger.Err(err))...)
@@ -178,7 +178,7 @@ func (ss *signalService) ServeConnection(ctx context.Context, conn *quic.Conn) e
 		return errs.NewAppError(op, err)
 	}
 	log.Info("creds sended successfully", logUserData...)
-	userConnection.userData.ID = user.ID
+	userConnection.userId = user.ID
 	return ss.commandLoop(ctx, userConnection)
 }
 
@@ -186,7 +186,7 @@ func (ss *signalService) commandLoop(ctx context.Context, uc *userConnection) er
 	var (
 		op        = "signalService.commandLoop"
 		log       = ss.Logger.AddOp(op)
-		logUserId = logger.Attr("userID", uc.userData.ID)
+		logUserId = logger.Attr("userID", uc.userId.ID)
 	)
 
 	log.Info("serving connection in command loop...", logUserId)

@@ -10,10 +10,11 @@ import (
 	"fmt"
 	"hash"
 	"sync"
+	"time"
+
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/protocols"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/logger"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
@@ -24,7 +25,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 	var (
 		op           = "signalService.sendMsg"
 		log          = ss.Logger.AddOp(op)
-		userId       = uc.userData.ID
+		userId       = uc.userId
 		msgId        = msg.Id
 		payloadData  = msg.Data
 		logUserId    = logger.Attr("userId", userId)
@@ -40,7 +41,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 
 		return err
 	}
-	replyMsg, err := protocols.NewReplyMessage(uc.userData, sendPayloadMsg.Payload)
+	replyMsg, err := protocols.NewReplyMessage(uc.userId, sendPayloadMsg.Payload)
 	if err != nil {
 		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
 
@@ -102,7 +103,7 @@ func (ss *signalService) datagramProxing(ctx context.Context, uc *userConnection
 		op          = "signalService.datagramStream"
 		log         = ss.Logger.AddOp(op)
 		msgId       = msg.Id
-		logUserId   = logger.Attr("userId", uc.userData.ID)
+		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msgId)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
@@ -174,7 +175,7 @@ func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection
 	var (
 		op        = "signalService.closeConnection"
 		log       = ss.Logger.AddOp(op)
-		logUserId = logger.Attr("userId", uc.userData.ID)
+		logUserId = logger.Attr("userId", uc.userId)
 	)
 
 	log.Info("connection closing...", logUserId)
@@ -187,7 +188,7 @@ func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection
 		log.Error("failed to close connection", logger.Err(clerr), logUserId)
 		return errs.NewAppError(op, clerr)
 	}
-	if err := ss.SessionRepo.DeleteSession(ctx, uc.userData.ID); err != nil {
+	if err := ss.SessionRepo.DeleteSession(ctx, uc.userId); err != nil {
 		log.Error("failed to delete session", logger.Err(err), logUserId)
 		return errs.NewAppError(op, err)
 	}
@@ -199,7 +200,7 @@ func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, ms
 	var (
 		op          = "signalService.fetchOnline"
 		log         = ss.Logger.AddOp(op)
-		logUserId   = logger.Attr("userId", uc.userData.ID)
+		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msgId)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
@@ -233,7 +234,7 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 	var (
 		op          = "signalService.fetchOnline"
 		log         = ss.Logger.AddOp(op)
-		logUserId   = logger.Attr("userId", uc.userData.ID)
+		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
@@ -295,22 +296,22 @@ func (ss *signalService) addInSession(ctx context.Context, uc *userConnection, m
 	var (
 		op          = "signalService.addSession"
 		log         = ss.Logger.AddOp(op)
-		logUserId   = logger.Attr("userId", uc.userData.ID)
+		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
 	log.Info("additing user in session...", logUserData...)
-	userData, err := protocols.ToUserDataMessage(ss.Validator, msg.Data)
+	userIdData, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast add session message", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
-	userId := userData.Data.ID
+	userId := userIdData.ID
 	if err := ss.ConnectionRepo.IsExists(ctx, userId); err != nil {
 		return errs.NewAppError(op, err)
 	}
 
-	if err := ss.SessionRepo.AddInSession(ctx, uc.userData.ID, userData.Data); err != nil {
+	if err := ss.SessionRepo.AddInSession(ctx, uc.userId, userId); err != nil {
 		log.Error("failed to add in session", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
@@ -326,7 +327,7 @@ func (ss *signalService) deleteFromSession(ctx context.Context, uc *userConnecti
 	var (
 		op          = "signalService.deleteFromSession"
 		log         = ss.Logger.AddOp(op)
-		logUserId   = logger.Attr("userId", uc.userData.ID)
+		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
@@ -341,7 +342,7 @@ func (ss *signalService) deleteFromSession(ctx context.Context, uc *userConnecti
 		return errs.NewAppError(op, err)
 	}
 
-	if err := ss.SessionRepo.DeleteFromSession(ctx, uc.userData.ID, userId); err != nil {
+	if err := ss.SessionRepo.DeleteFromSession(ctx, uc.userId, userId); err != nil {
 		log.Error("failed to delete from session", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
@@ -357,7 +358,7 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 	var (
 		op          = "signalService.fetchSessionsById"
 		log         = ss.Logger.AddOp(op)
-		logUserId   = logger.Attr("userId", uc.userData.ID)
+		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
