@@ -294,12 +294,13 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 
 func (ss *signalService) addInSession(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
 	var (
-		op          = "signalService.addSession"
+		op          = "signalService.addInSession"
 		log         = ss.Logger.AddOp(op)
 		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
+	log.Info("msg", logger.Attr("msg", msg))
 	log.Info("additing user in session...", logUserData...)
 	userIdData, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
