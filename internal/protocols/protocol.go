@@ -17,8 +17,8 @@ type Message struct {
 }
 
 type SendPayloadMessage struct {
-	RecevierIDs []uuid.UUID     `json:"ids" validate:"required,min=1"`
-	Payload     json.RawMessage `json:"payload" validate:"required"`
+	RecevierIDs []uuid.UUID `json:"ids" validate:"required,min=1"`
+	Payload     []byte      `json:"payload" validate:"required"`
 }
 
 type DatagramProxingMessage struct {
@@ -43,8 +43,8 @@ type CredsMessage struct {
 }
 
 type ReplyMessage struct {
-	Sender  uuid.UUID       `json:"sender" validate:"required"`
-	Payload json.RawMessage `json:"payload" validate:"required"`
+	Sender  uuid.UUID `json:"sender" validate:"required"`
+	Payload []byte    `json:"payload" validate:"required"`
 }
 
 func ToUserIdMessage(v *validator.Validator, data json.RawMessage) (*UserId, error) {

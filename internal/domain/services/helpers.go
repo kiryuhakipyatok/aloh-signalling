@@ -41,13 +41,14 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 
 		return err
 	}
+	logReseicersIds := logger.Attr("reseiversId", sendPayloadMsg.RecevierIDs)
 	replyMsg, err := protocols.NewReplyMessage(uc.userId, sendPayloadMsg.Payload)
 	if err != nil {
 		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
 
 		return err
 	}
-	log.Info("getting receivers connections", userLogsData...)
+	log.Info("getting receivers connections", logger.NewLogData(logReseicersIds, userLogsData))
 	receivers, err := ss.ConnectionRepo.GetConnects(ctx, sendPayloadMsg.RecevierIDs)
 	if err != nil {
 		log.Error("failed to get contacts", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
@@ -56,7 +57,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 	}
 	log.Info("receivers connections received successfully")
 	g, gCtx := errgroup.WithContext(ctx)
-	log.Info("opening receivers streams", userLogsData...)
+	log.Info("opening receivers streams", logger.NewLogData(logReseicersIds, userLogsData))
 	for _, r := range receivers {
 		logReceiverId := logger.Attr("receiverId", r.ID)
 		receiverLogsData := logger.NewLogData(logMsgId, logReceiverId)
