@@ -378,7 +378,7 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 		log.Error("failed to get sessions", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
-	log.Info("sessions", logger.Attr("users", users))
+
 	payload, err := json.Marshal(users)
 	if err != nil {
 		log.Error("failed to marshal sessions", logger.Err(err))
