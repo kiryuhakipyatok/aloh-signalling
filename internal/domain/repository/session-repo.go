@@ -56,6 +56,7 @@ func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId, userId uuid.
 			return errors.New("invalid value type")
 		}
 		session.ConnectedUsers = append(session.ConnectedUsers, userId)
+		sr.Swap(sessionId, session)
 		return nil
 	}
 }
@@ -94,6 +95,7 @@ func (sr *sessionRepo) DeleteFromSession(ctx context.Context, sessionId, userId 
 			return errors.New("invalid value type")
 		}
 		session.ConnectedUsers = deleteFromSessionConns(session.ConnectedUsers, userId)
+		sr.Swap(sessionId, session)
 		return nil
 	}
 }
@@ -104,7 +106,6 @@ func (sr *sessionRepo) GetSessions(ctx context.Context, sessionId uuid.UUID) ([]
 	case <-ctx.Done():
 		return nil, errs.ErrRequestTimeout(op)
 	default:
-		connectedUsers := []uuid.UUID{}
 		val, ok := sr.Load(sessionId)
 		if !ok {
 			return nil, errs.ErrNotFound(op)
@@ -114,11 +115,7 @@ func (sr *sessionRepo) GetSessions(ctx context.Context, sessionId uuid.UUID) ([]
 			return nil, errs.ErrInvalidType(op)
 		}
 
-		for _, id := range session.ConnectedUsers {
-			connectedUsers = append(connectedUsers, id)
-		}
-
-		return connectedUsers, nil
+		return session.ConnectedUsers, nil
 	}
 }
 
