@@ -341,6 +341,7 @@ func (ss *signalService) deleteFromSession(ctx context.Context, uc *userConnecti
 	}
 	userId := data.ID
 	if err := ss.ConnectionRepo.IsExists(ctx, userId); err != nil {
+		log.Error("connection not found", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
 
