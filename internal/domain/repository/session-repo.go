@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"sync"
 
@@ -53,7 +52,7 @@ func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId, userId uuid.
 		}
 		session, ok := val.(models.Session)
 		if !ok {
-			return errors.New("invalid value type")
+			return errs.ErrInvalidType(op)
 		}
 		session.ConnectedUsers = append(session.ConnectedUsers, userId)
 		sr.Swap(sessionId, session)
@@ -61,19 +60,20 @@ func (sr *sessionRepo) AddInSession(ctx context.Context, sessionId, userId uuid.
 	}
 }
 
-func (cr *sessionRepo) DeleteSession(ctx context.Context, sessionId uuid.UUID) error {
+func (sr *sessionRepo) DeleteSession(ctx context.Context, sessionId uuid.UUID) error {
 	op := "connectionsRepo.DeleteSession"
 	select {
 	case <-ctx.Done():
 		return errs.ErrRequestTimeout(op)
 	default:
-		cr.Delete(sessionId)
-		cr.Range(func(key, value any) bool {
+		sr.Delete(sessionId)
+		sr.Range(func(key, value any) bool {
 			session, ok := value.(models.Session)
 			if !ok {
 				return false
 			}
 			session.ConnectedUsers = deleteFromSessionConns(session.ConnectedUsers, sessionId)
+			sr.Swap(session.UserId, session)
 			return true
 		})
 		return nil
@@ -92,7 +92,7 @@ func (sr *sessionRepo) DeleteFromSession(ctx context.Context, sessionId, userId 
 		}
 		session, ok := val.(models.Session)
 		if !ok {
-			return errors.New("invalid value type")
+			return errs.ErrInvalidType(op)
 		}
 		session.ConnectedUsers = deleteFromSessionConns(session.ConnectedUsers, userId)
 		sr.Swap(sessionId, session)
