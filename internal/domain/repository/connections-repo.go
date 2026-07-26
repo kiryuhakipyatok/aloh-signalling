@@ -6,14 +6,16 @@ import (
 	"sync"
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/domain/models"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
+
+	"github.com/google/uuid"
 )
 
 type ConnectionsRepo interface {
 	AddConnect(ctx context.Context, connection *models.Connection) (*models.Connection, error)
-	DeleteConnect(ctx context.Context, id string, conn *models.Connection) error
-	GetConnects(ctx context.Context, ids []string) ([]*models.Connection, error)
-	FetchAll(ctx context.Context) ([]string, error)
-	IsExists(ctx context.Context, id string) error
+	DeleteConnect(ctx context.Context, id uuid.UUID, conn *models.Connection) error
+	GetConnects(ctx context.Context, ids []uuid.UUID) ([]*models.Connection, error)
+	FetchAll(ctx context.Context) ([]uuid.UUID, error)
+	IsExists(ctx context.Context, id uuid.UUID) error
 }
 
 type connectionsRepo struct {
@@ -43,7 +45,7 @@ func (cr *connectionsRepo) AddConnect(ctx context.Context, connection *models.Co
 	}
 }
 
-func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id string, conn *models.Connection) error {
+func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id uuid.UUID, conn *models.Connection) error {
 	op := "connectionsRepo.DeleteConnect"
 	select {
 	case <-ctx.Done():
@@ -57,7 +59,7 @@ func (cr *connectionsRepo) DeleteConnect(ctx context.Context, id string, conn *m
 	}
 }
 
-func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]*models.Connection, error) {
+func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []uuid.UUID) ([]*models.Connection, error) {
 	op := "connectionsRepo.GetConnects"
 	users := []*models.Connection{}
 	select {
@@ -79,15 +81,15 @@ func (cr *connectionsRepo) GetConnects(ctx context.Context, ids []string) ([]*mo
 	}
 }
 
-func (cr *connectionsRepo) FetchAll(ctx context.Context) ([]string, error) {
+func (cr *connectionsRepo) FetchAll(ctx context.Context) ([]uuid.UUID, error) {
 	op := "connectionsRepo.GetAll"
-	ids := []string{}
+	ids := []uuid.UUID{}
 	select {
 	case <-ctx.Done():
 		return nil, errs.ErrRequestTimeout(op)
 	default:
 		cr.Range(func(key, value any) bool {
-			id, ok := key.(string)
+			id, ok := key.(uuid.UUID)
 			if !ok {
 				return false
 			}
@@ -98,7 +100,7 @@ func (cr *connectionsRepo) FetchAll(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-func (cr *connectionsRepo) IsExists(ctx context.Context, id string) error {
+func (cr *connectionsRepo) IsExists(ctx context.Context, id uuid.UUID) error {
 	op := "connectionsRepo.IsExists"
 	select {
 	case <-ctx.Done():

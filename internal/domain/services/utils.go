@@ -7,6 +7,7 @@ import (
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/protocols"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 
+	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 )
 
@@ -46,7 +47,7 @@ func (ss *signalService) processMsg(uc *userConnection, msg *protocols.Message) 
 	return nil
 }
 
-func writeSuccessMsg(ctx context.Context, stream *quic.Stream, msgId string) error {
+func writeSuccessMsg(ctx context.Context, stream *quic.Stream, msgId uuid.UUID) error {
 	sm, err := protocols.SuccessMessage(msgId)
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func writeSuccessMsg(ctx context.Context, stream *quic.Stream, msgId string) err
 	return nil
 }
 
-func processError(ctx context.Context, uc *userConnection, err error, msgId string) error {
+func processError(ctx context.Context, uc *userConnection, err error, msgId uuid.UUID) error {
 	var pErr []byte
 	switch {
 	case errors.Is(err, errs.ErrAlreadyExistsBase):

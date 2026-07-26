@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"hash"
 	"sync"
+	"time"
+
 	"github.com/kiryuhakipyatok/aloh-signalling/internal/protocols"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/logger"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -39,6 +41,7 @@ func (ss *signalService) sendMsg(ctx context.Context, uc *userConnection, msg *p
 
 		return err
 	}
+
 	replyMsg, err := protocols.NewReplyMessage(uc.userId, sendPayloadMsg.Payload)
 	if err != nil {
 		log.Error("failed to cast reply message", logger.NewLogData(logger.Err(err), logUserId, logMsgId)...)
@@ -194,7 +197,7 @@ func (ss *signalService) closeConnection(ctx context.Context, uc *userConnection
 	return nil
 }
 
-func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, msgId string) error {
+func (ss *signalService) fetchOnline(ctx context.Context, uc *userConnection, msgId uuid.UUID) error {
 	var (
 		op          = "signalService.fetchOnline"
 		log         = ss.Logger.AddOp(op)
@@ -242,7 +245,7 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 		log.Error("failed to cast fetch online friends msg", logger.Err(err), logMsgId, logUserId)
 		return errs.NewAppError(op, err)
 	}
-	friendsOnline := make(map[string][]string, len(friendsMsg.FriendsIds))
+	friendsOnline := make(map[uuid.UUID][]uuid.UUID, len(friendsMsg.FriendsIds))
 	var (
 		eg errgroup.Group
 		mu sync.Mutex
@@ -292,23 +295,25 @@ func (ss *signalService) fetchOnlineFriends(ctx context.Context, uc *userConnect
 
 func (ss *signalService) addInSession(ctx context.Context, uc *userConnection, msg *protocols.Message) error {
 	var (
-		op          = "signalService.addSession"
+		op          = "signalService.addInSession"
 		log         = ss.Logger.AddOp(op)
 		logUserId   = logger.Attr("userId", uc.userId)
 		logMsgId    = logger.Attr("msgId", msg.Id)
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
+
 	log.Info("additing user in session...", logUserData...)
-	userId, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
+	userIdData, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast add session message", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
-	if err := ss.ConnectionRepo.IsExists(ctx, userId.ID); err != nil {
+	userId := userIdData.ID
+	if err := ss.ConnectionRepo.IsExists(ctx, userId); err != nil {
 		return errs.NewAppError(op, err)
 	}
 
-	if err := ss.SessionRepo.AddInSession(ctx, uc.userId, userId.ID); err != nil {
+	if err := ss.SessionRepo.AddInSession(ctx, uc.userId, userId); err != nil {
 		log.Error("failed to add in session", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
@@ -329,16 +334,18 @@ func (ss *signalService) deleteFromSession(ctx context.Context, uc *userConnecti
 		logUserData = logger.NewLogData(logUserId, logMsgId)
 	)
 	log.Info("deleting user from session...", logUserData...)
-	userId, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
+	data, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast delete from session message", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
-	if err := ss.ConnectionRepo.IsExists(ctx, userId.ID); err != nil {
+	userId := data.ID
+	if err := ss.ConnectionRepo.IsExists(ctx, userId); err != nil {
+		log.Error("connection not found", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
 
-	if err := ss.SessionRepo.DeleteFromSession(ctx, uc.userId, userId.ID); err != nil {
+	if err := ss.SessionRepo.DeleteFromSession(ctx, uc.userId, userId); err != nil {
 		log.Error("failed to delete from session", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
@@ -361,16 +368,18 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 
 	log.Info("fetching sessions by id...", logUserData...)
 
-	userId, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
+	userIdMsg, err := protocols.ToUserIdMessage(ss.Validator, msg.Data)
 	if err != nil {
 		log.Error("failed to cast add session message", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
-	users, err := ss.SessionRepo.GetSessions(ctx, userId.ID)
+	userId := userIdMsg.ID
+	users, err := ss.SessionRepo.GetSessions(ctx, userId)
 	if err != nil {
 		log.Error("failed to get sessions", logger.NewLogData(logger.Err(err), logMsgId, logUserId)...)
 		return errs.NewAppError(op, err)
 	}
+
 	payload, err := json.Marshal(users)
 	if err != nil {
 		log.Error("failed to marshal sessions", logger.Err(err))
@@ -391,7 +400,7 @@ func (ss *signalService) fetchSessionsById(ctx context.Context, uc *userConnecti
 	return nil
 }
 
-func (ss *signalService) genCreds(ctx context.Context, id string) (string, string, error) {
+func (ss *signalService) genCreds(ctx context.Context, id uuid.UUID) (string, string, error) {
 	op := "utils.genCreds"
 	select {
 	case <-ctx.Done():
@@ -399,7 +408,7 @@ func (ss *signalService) genCreds(ctx context.Context, id string) (string, strin
 	default:
 	}
 	exp := time.Now().Add(ss.Cfg.CredsTTL).Unix()
-	username := fmt.Sprintf("%d:%s", exp, id)
+	username := fmt.Sprintf("%d:%s", exp, id.String())
 	fmt.Println(ss.Cfg.Secret)
 	mac := hmac.New(func() hash.Hash { return sha1.New() }, []byte(ss.Cfg.Secret))
 	mac.Write([]byte(username))

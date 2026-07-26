@@ -6,28 +6,35 @@ import (
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/errs"
 
 	"github.com/kiryuhakipyatok/aloh-signalling/pkg/validator"
+
+	"github.com/google/uuid"
 )
 
 type Message struct {
-	Id   string          `json:"id" validate:"required,min=1"`
+	Id   uuid.UUID       `json:"id" validate:"required,uuid"`
 	Type *uint8          `json:"type" validate:"required"`
 	Data json.RawMessage `json:"data" validate:"required"`
 }
 
-type UserId struct {
-	ID string `json:"id" validate:"required,min=1"`
-}
 type SendPayloadMessage struct {
-	RecevierIDs []string `json:"ids" validate:"required,min=1"`
-	Payload     []byte   `json:"payload" validate:"required"`
+	RecevierIDs []uuid.UUID `json:"ids" validate:"required,min=1"`
+	Payload     []byte      `json:"payload" validate:"required"`
 }
 
 type DatagramProxingMessage struct {
-	RecevierIDs []string `json:"ids" validate:"required,min=1"`
+	RecevierIDs []uuid.UUID `json:"ids" validate:"required,min=1"`
 }
 
+type UserId struct {
+	ID uuid.UUID `json:"id" validate:"required,uuid"`
+}
+
+// type UserData struct {
+// 	Data models.UserData `json:"user-data" validate:"required"`
+// }
+
 type FetchFriendsOnline struct {
-	FriendsIds []string `json:"friendsIds" validate:"required,min=1"`
+	FriendsIds []uuid.UUID `json:"friendsIds" validate:"required,min=1"`
 }
 
 type CredsMessage struct {
@@ -36,21 +43,33 @@ type CredsMessage struct {
 }
 
 type ReplyMessage struct {
-	Sender  string `json:"sender-id" validate:"required,min=1"`
-	Payload []byte `json:"payload" validate:"required"`
+	Sender  uuid.UUID `json:"sender" validate:"required"`
+	Payload []byte    `json:"payload" validate:"required"`
 }
 
 func ToUserIdMessage(v *validator.Validator, data json.RawMessage) (*UserId, error) {
 	op := "protocols.ToUserIdMessage"
-	idMsg := &UserId{}
-	if err := json.Unmarshal(data, idMsg); err != nil {
+	userIdMsg := &UserId{}
+	if err := json.Unmarshal(data, userIdMsg); err != nil {
 		return nil, errs.ErrInvalidJson(op, err)
 	}
-	if err := v.Validate.Struct(idMsg); err != nil {
+	if err := v.Validate.Struct(userIdMsg); err != nil {
 		return nil, errs.ErrValidation(op, err)
 	}
-	return idMsg, nil
+	return userIdMsg, nil
 }
+
+// func ToUserDataMessage(v *validator.Validator, data json.RawMessage) (*UserData, error) {
+// 	op := "protocols.ToUserDataMessage"
+// 	userDataMsg := &UserData{}
+// 	if err := json.Unmarshal(data, userDataMsg); err != nil {
+// 		return nil, errs.ErrInvalidJson(op, err)
+// 	}
+// 	if err := v.Validate.Struct(userDataMsg); err != nil {
+// 		return nil, errs.ErrValidation(op, err)
+// 	}
+// 	return userDataMsg, nil
+// }
 
 func ToSendPayloadMessage(v *validator.Validator, data json.RawMessage) (*SendPayloadMessage, error) {
 	op := "protocols.ToSendPayloadMessage"
@@ -64,10 +83,10 @@ func ToSendPayloadMessage(v *validator.Validator, data json.RawMessage) (*SendPa
 	return connectMsg, nil
 }
 
-func NewReplyMessage(senderId string, pyaload json.RawMessage) ([]byte, error) {
+func NewReplyMessage(sender uuid.UUID, pyaload json.RawMessage) ([]byte, error) {
 	op := "protocols.NewReplyMessage"
 	rm := ReplyMessage{
-		Sender:  senderId,
+		Sender:  sender,
 		Payload: pyaload,
 	}
 	replyMsg, err := json.Marshal(rm)
