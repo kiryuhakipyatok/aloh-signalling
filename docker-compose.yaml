@@ -7,5 +7,3 @@ services:
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}/tcp" 
       - "${SERVER_PORT}:${SERVER_PORT}/udp"
-    volumes:
-      - ./certs:/etc/certs:ro 
