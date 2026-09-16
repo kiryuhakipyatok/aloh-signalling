@@ -24,5 +24,10 @@ deploy-job:
     - cp $ENV_FILE .env
     - docker-compose rm -s -f aloh || true
     - docker-compose -f docker-compose.yaml up -d --force-recreate aloh
+    - if [ "$R_EXIT_CODE" -ne 0 ]; then
+        echo "container failed with exit code $R_EXIT_CODE";
+        docker logs aloh;
+        exit 1;
+      fi
     - sleep 5
     - docker-compose logs aloh
