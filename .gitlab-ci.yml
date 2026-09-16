@@ -25,7 +25,7 @@ deploy-job:
     - ls -a
     - docker-compose rm -s -f aloh || true
     - docker-compose -f docker-compose.yaml up -d --force-recreate aloh
-    - R_EXIT_CODE=$(docker inspect -f '{{.State.ExitCode}}' alohssh)
+    - R_EXIT_CODE=$(docker inspect -f '{{.State.ExitCode}}' aloh)
     - if [ "$R_EXIT_CODE" -ne 0 ]; then
         echo "container failed with exit code $R_EXIT_CODE";
         docker logs aloh;
